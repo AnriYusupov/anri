@@ -43,6 +43,7 @@ var PROJECTS = (function(){
       video: !!(s.coverVideo || s.video),
       videoSrc: s.coverVideo || s.video || "",
       title: (s.title||"UNTITLED").toUpperCase(),
+      fullTitle: s.fullTitle || "",   /* полное имя — как написано, без верхнего регистра */
       year:  s.year  || "",
       client:(s.client||"").toUpperCase(),
       desc:  s.desc || "",
@@ -174,6 +175,7 @@ var LAYOUT = (function(){
 
 var ICON_PX = LAYOUT.iconSize || 76;
 
+var TRACK_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='13' fill='%231d1f26'/%3E%3Crect x='.5' y='.5' width='63' height='63' rx='12.5' fill='none' stroke='rgba(255,255,255,.18)'/%3E%3Cpath d='M40 15v26.5a7.5 7.5 0 1 1-4-6.6V22l-14 3.2v20.3a7.5 7.5 0 1 1-4-6.6V21l22-6z' fill='%23fff'/%3E%3C/svg%3E";
 var FOLDER_SRC = "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20200%20164%22%3E%3Cdefs%3E%3ClinearGradient%20id%3D%22b%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%220%22%20y2%3D%221%22%3E%3Cstop%20offset%3D%220%22%20stop-color%3D%22%2357a9f2%22%2F%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22%232f7fdd%22%2F%3E%3C%2FlinearGradient%3E%3ClinearGradient%20id%3D%22f%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%220%22%20y2%3D%221%22%3E%3Cstop%20offset%3D%220%22%20stop-color%3D%22%2393cdff%22%2F%3E%3Cstop%20offset%3D%220.55%22%20stop-color%3D%22%2357a4f0%22%2F%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22%233d8ce4%22%2F%3E%3C%2FlinearGradient%3E%3C%2Fdefs%3E%3Cpath%20d%3D%22M10%2036a14%2014%200%200%201%2014-14h44a10%2010%200%200%201%207%203l17%2017h84a14%2014%200%200%201%2014%2014v78a14%2014%200%200%201-14%2014H24a14%2014%200%200%201-14-14z%22%20fill%3D%22url%28%23b%29%22%2F%3E%3Cpath%20d%3D%22M10%2062a14%2014%200%200%201%2014-14h152a14%2014%200%200%201%2014%2014v72a14%2014%200%200%201-14%2014H24a14%2014%200%200%201-14-14z%22%20fill%3D%22url%28%23f%29%22%2F%3E%3Cpath%20d%3D%22M10%2062a14%2014%200%200%201%2014-14h152a14%2014%200%200%201%2014%2014v6H10z%22%20fill%3D%22%23ffffff%22%20opacity%3D%22.22%22%2F%3E%3C%2Fsvg%3E";
 
 (function(){
@@ -191,7 +193,23 @@ var FOLDER_SRC = "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org
     var cap = document.createElement("div");
     cap.className = "cap";
 
-    if(it.type === "folder"){
+    if(it.type === "track"){
+      img.src = it.cover || TRACK_SRC;
+      img.alt = it.label || "Трек";
+      cap.textContent = it.label || "Трек";
+      d.classList.add("dtrack");
+      (function(tr, node){
+        node.addEventListener("click", function(){
+          if(!tr.src) return;
+          if(window.setSiteTrack) setSiteTrack(tr.src, tr.label || "");
+          /* отмечаем играющий трек, как запущенное приложение в доке */
+          var all = deskPane.querySelectorAll(".dtrack");
+          for(var q=0;q<all.length;q++) all[q].classList.remove("playing");
+          node.classList.add("playing");
+        });
+        node.addEventListener("mouseenter", function(){ if(window.hideQL) hideQL(); });
+      })(it, d);
+    } else if(it.type === "folder"){
       img.src = it.cover || FOLDER_SRC;
       img.alt = it.label || "Папка";
       cap.textContent = it.label || "Папка";
@@ -463,9 +481,18 @@ function hideApp(){
     }
     qlRaf = requestAnimationFrame(qlLoop);
   }
+  var qlName = qlWin.querySelector(".qlname");
+  var qlMeta = qlWin.querySelector(".qlmeta");
+
   window.showQL = function(proj){
     clearTimeout(qlTimer);
+    /* в полосе окна — короткое имя, крупно поверх кадра — полное */
     qlTit.textContent = proj.title;
+    if(qlName) qlName.textContent = proj.fullTitle || proj.title;
+    if(qlMeta){
+      var src = (SITE.projects || [])[proj.index] || {};
+      qlMeta.textContent = [src.category, proj.year].filter(Boolean).join(" · ");
+    }
     qlY.textContent = proj.year;
     qlC.textContent = proj.client;
     /* the project's own video wins; the frame sequence is only a fallback */
@@ -549,71 +576,8 @@ function hideApp(){
 
 /* медиа рабочего стола */
 document.getElementById("deskAudio").src = "media/bbfe5b9a8c.mp3";
-/* ---- музыка на рабочем столе ----
-   Трек включается, когда доходишь до последнего экрана, и глохнет, если уйти наверх.
-   Браузер не даёт стартовать со звуком сам — поэтому есть кнопка SOUND в углу. */
-(function(){
-  var audio = document.getElementById("deskAudio");
-  if(!audio) return;
+/* музыка вынесена в index.html — она стартует с заставки, а не с рабочего стола */
 
-  var unlocked = false, wantPlay = false;
-
-  function tryPlay(){
-    var p = audio.play();
-    if(p && p.catch) p.catch(function(){ wantPlay = true; });
-  }
-
-  /* звук нельзя включить без действия человека: ловим первый клик/клавишу */
-  function unlock(e){
-    if(unlocked) return;
-    unlocked = true;
-    var onBtn = e && e.target && e.target.closest && e.target.closest("#sndBtn");
-    if(!onBtn) audio.muted = false;      /* кнопка сама решает, если нажали её */
-    if(wantPlay) tryPlay();
-    ["pointerdown","keydown","touchstart"].forEach(function(ev){
-      window.removeEventListener(ev, unlock, true);
-    });
-  }
-  ["pointerdown","keydown","touchstart"].forEach(function(e){
-    window.addEventListener(e, unlock, true);
-  });
-
-  /* --- кнопка звука --- */
-  var btn = document.getElementById("sndBtn");
-  function paint(){
-    if(!btn) return;
-    var live = !audio.muted && !audio.paused;
-    btn.classList.toggle("on", live);
-    btn.querySelector(".sl").textContent = live ? "SOUND ON" : "SOUND OFF";
-  }
-  if(btn){
-    btn.addEventListener("click", function(e){
-      e.stopPropagation();
-      var silent = audio.muted || audio.paused;   /* состояние ДО разблокировки */
-      unlock(e);
-      if(silent){ audio.muted = false; tryPlay(); }
-      else { audio.muted = true; }
-      paint();
-    });
-  }
-  setInterval(paint, 400);
-
-  /* --- запуск и остановка вместе с появлением рабочего стола --- */
-  var playing = false, started = false;
-  window.deskAudioSync = function(visible){
-    if(visible && !playing){
-      playing = true;
-      if(!started){ started = true; try{ audio.currentTime = 0; }catch(e){} }
-      if(!unlocked) audio.muted = true;   /* без клика браузер пустит только беззвучно */
-      tryPlay();
-      paint();
-    } else if(!visible && playing){
-      playing = false;
-      audio.pause();
-      paint();
-    }
-  };
-})();
 
 /* ---- окно папки: содержимое открывается как в системе ---- */
 function openFolder(folder){
@@ -790,7 +754,7 @@ function renderBlocks(blocks, host){
 }
 function openCase(proj){
   var src = (SITE.projects||[])[proj.index] || {};
-  caseView.querySelector(".cvname").textContent = proj.title;
+  caseView.querySelector(".cvname").textContent = proj.fullTitle || proj.title;
   caseView.querySelector(".cvmeta").textContent = [src.client, src.category, src.year].filter(Boolean).join(" · ");
   var inner = caseView.querySelector(".cvinner");
   var blocks = (src.blocks||[]).slice();
@@ -1453,10 +1417,8 @@ function frame(now){
     var par = ease(dsk) * 46;
     deskWall.style.transform = "translate3d(" + (-par).toFixed(1) + "px,0,0) scale(1.06)";
     deskSec.style.pointerEvents = rev > 0.9 ? "auto" : "none";
-    if(window.deskAudioSync) deskAudioSync(rev > 0.85);
   } else {
     deskSec.style.pointerEvents = "none";
-    if(window.deskAudioSync) deskAudioSync(false);
     typeSec.style.zIndex = "";
     typeSec.style.clipPath = "none";
     typeSec.style.webkitMaskImage = "none";

@@ -15,6 +15,42 @@
 <meta name="twitter:card" content="summary_large_image">
 <title>ANRI YUSUPOV — PORTFOLIO</title>
 <style>
+
+
+/* ---------- значок трека на столе ---------- */
+.dicon.dtrack .thumb{border-radius:11px}
+.dicon.dtrack.playing .thumb{box-shadow:0 0 0 2px rgba(255,255,255,.85),0 8px 22px -6px rgba(0,0,0,.8)}
+.dicon.dtrack.playing .cap::after{content:" ▶";font-size:.85em;opacity:.9}
+/* ---------- кнопка звука в шапке: набор как у WORK / ABOUT ---------- */
+#sndTop{position:absolute;left:26px;top:64px;display:flex;align-items:center;gap:7px;
+  background:none;border:0;padding:0;cursor:pointer;pointer-events:auto;color:#fff;
+  font-family:'Anton',"Helvetica Neue",Helvetica,Arial,sans-serif;font-size:12px;
+  letter-spacing:1.2px;white-space:nowrap;opacity:.55;transition:opacity .2s}
+#sndTop:hover{opacity:1}
+#sndTop.on{opacity:1}
+#sndTop i{width:9px;height:9px;display:block;background:currentColor;
+  clip-path:polygon(0 34%,28% 34%,58% 5%,58% 95%,28% 66%,0 66%)}
+#sndTop.on i{box-shadow:0 0 8px rgba(255,255,255,.7)}
+@media (max-width:640px){#sndTop{top:58px;font-size:11px}}
+/* ---------- экран загрузки ---------- */
+#ayLoad{position:fixed;inset:0;z-index:9999;background:#000;overflow:hidden;
+  opacity:1;transition:opacity .5s ease}
+#ayLoad.gone{opacity:0;pointer-events:none}
+#ayLoadV{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+#ayLoadC{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;mix-blend-mode:difference;color:#fff}
+#ayLoadT{font-family:'Anton',"Helvetica Neue",Helvetica,Arial,sans-serif;font-size:24px;
+  letter-spacing:.42em;padding-left:.42em;line-height:1;text-transform:uppercase}
+#ayLoadBar{margin-top:16px;width:170px;height:1px;background:rgba(255,255,255,.30)}
+#ayLoadFill{height:100%;width:0;background:#fff;transition:width .35s ease}
+#ayLoadN{margin-top:9px;font:600 8px/1 ui-monospace,Menlo,monospace;letter-spacing:.34em}
+#ayEnter{margin-top:20px;padding:9px 22px;border:1px solid rgba(255,255,255,.5);
+  border-radius:22px;background:transparent;color:#fff;cursor:pointer;
+  font:600 9px/1 ui-monospace,Menlo,monospace;letter-spacing:.34em;text-transform:uppercase;
+  opacity:0;pointer-events:none;transition:opacity .3s ease}
+#ayEnter.on{opacity:1;pointer-events:auto}
+#ayEnter:hover{background:rgba(255,255,255,.14)}
+
 @font-face{
   font-family:'Anton';
   src:url(media/395b374d3e.woff2) format('woff2');
@@ -141,7 +177,16 @@ body{background:var(--black);font-family:"Helvetica Neue",Helvetica,Arial,sans-s
 #qlWin .l{width:11px;height:11px;border-radius:50%;display:block;box-shadow:0 0 0 .5px rgba(0,0,0,.25) inset}
 #qlWin .l.r{background:#ff5f57}#qlWin .l.y{background:#febc2e}#qlWin .l.g{background:#28c840}
 #qlWin .qlt{margin-left:10px;font-size:12px;font-weight:600;letter-spacing:.04em;color:rgba(255,255,255,.86);text-transform:uppercase}
-#qlWin .qlbody{aspect-ratio:16/9;background:#000}
+#qlWin .qlbody{aspect-ratio:16/9;background:#000;position:relative}
+.qlover{position:absolute;left:0;right:0;bottom:0;padding:26px 30px 22px;
+  background:linear-gradient(180deg,rgba(0,0,0,0) 0%,rgba(0,0,0,.30) 42%,rgba(0,0,0,.72) 100%);
+  pointer-events:none}
+.qlname{font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue",Helvetica,Arial,sans-serif;
+  font-weight:700;letter-spacing:-.022em;line-height:1.06;color:#fff;
+  font-size:clamp(19px,2.05vw,34px);max-width:74%;
+  text-shadow:0 2px 14px rgba(0,0,0,.55)}
+.qlmeta{margin-top:9px;font-size:12px;letter-spacing:.02em;color:rgba(255,255,255,.72);
+  text-shadow:0 1px 8px rgba(0,0,0,.6)}
 #qlWin .qlbody{position:relative}
 #qlWin .qlv,#qlWin .qlvid{width:100%;height:100%;object-fit:cover;display:block}
 #qlWin .qlvid{position:absolute;inset:0;display:none}
@@ -280,6 +325,16 @@ body.gl #scene.gridmode .frame > img,body.gl #scene.gridmode .frame > video{opac
 </style>
 </head>
 <body>
+<div id="ayLoad">
+  <video id="ayLoadV" autoplay muted loop playsinline preload="auto" src="media/loader.mp4"></video>
+  <div id="ayLoadC">
+    <div id="ayLoadT">LOADING</div>
+    <div id="ayLoadBar"><div id="ayLoadFill"></div></div>
+    <div id="ayLoadN">0%</div>
+    <button id="ayEnter" type="button">Enter</button>
+  </div>
+</div>
+
 
 
 
@@ -300,15 +355,12 @@ body.gl #scene.gridmode .frame > img,body.gl #scene.gridmode .frame > video{opac
     <div id="deskPane"></div>
     <div id="qlWin" aria-hidden="true">
       <div class="qlbar"><span class="l r"></span><span class="l y"></span><span class="l g"></span><span class="qlt"></span></div>
-      <div class="qlbody"><canvas class="qlv"></canvas><video class="qlvid" muted loop playsinline preload="auto"></video></div>
+      <div class="qlbody"><canvas class="qlv"></canvas><video class="qlvid" muted loop playsinline preload="auto"></video><div class="qlover"><div class="qlname"></div><div class="qlmeta"></div></div></div>
       <div class="qlfoot"><span class="qly"></span><span class="qlc"></span></div>
     </div>
     <canvas id="appCan" aria-hidden="true"></canvas>
     <div id="dock"></div>
     <audio id="deskAudio" loop preload="auto"></audio>
-    <button id="sndBtn" type="button" aria-label="Звук">
-      <span class="si"></span><span class="sl">SOUND OFF</span>
-    </button>
   </section>
 
   <!-- black scene with project boxes -->
@@ -336,6 +388,7 @@ body.gl #scene.gridmode .frame > img,body.gl #scene.gridmode .frame > video{opac
 
 <header id="topbar">
   <div id="logo" tabindex="0" role="button" aria-label="Back to top"><span>ANRI</span><span>YUSUPOV</span></div>
+  <button id="sndTop" type="button" aria-label="Звук"><i></i><span>SOUND OFF</span></button>
   <nav id="nav">
     <a id="navWork">WORK</a>
     <a id="navAbout">ABOUT</a>
@@ -1259,14 +1312,113 @@ addEventListener("load",function(){
 });
 </script>
 <script>
-/* ---- загрузчик: сначала данные с сервера, потом код ----
-   Контент и раскладка стола лежат в data/*.json — их правит админка,
-   поэтому страница берёт их при каждом открытии, а не хранит внутри себя. */
+/* ---- музыка сайта ----
+   Играет с самого начала и через все экраны. Стартует после клика по «Enter»
+   на заставке: браузер разрешает звук только после действия человека. */
 (function(){
+  var audio = document.getElementById("deskAudio");
+  var btn   = document.getElementById("sndTop");
+  if(!audio) return;
+
+  var wantSound = true;
+
+  function paint(){
+    if(!btn) return;
+    var live = !audio.paused && !audio.muted;
+    btn.classList.toggle("on", live);
+    btn.querySelector("span").textContent = live ? "SOUND ON" : "SOUND OFF";
+  }
+  function play(){
+    var p = audio.play();
+    if(p && p.catch) p.catch(function(){});
+  }
+
+  /* вызывается с заставки — клик по «Enter» и есть разрешение на звук */
+  window.startSiteAudio = function(){
+    /* если в админке отмечен стартовый трек — играем его */
+    try{
+      var dl = document.getElementById("DESK_LAYOUT");
+      if(dl){
+        var icons = (JSON.parse(dl.textContent).icons) || [];
+        for(var i=0;i<icons.length;i++){
+          if(icons[i].type === "track" && icons[i].startup && icons[i].src){
+            audio.src = icons[i].src;
+            window.currentTrackName = icons[i].label || "";
+            break;
+          }
+        }
+      }
+    }catch(e){}
+    audio.muted = !wantSound;
+    try{ audio.currentTime = 0; }catch(e){}
+    play(); paint();
+    setTimeout(paint, 400);
+  };
+
+  /* смена трека — с плавным затуханием, без резкого обрыва */
+  window.setSiteTrack = function(src, name){
+    if(!src || audio.getAttribute("src") === src) return;
+    var vol = audio.volume, t0 = performance.now();
+    (function down(){
+      var k = Math.min(1, (performance.now() - t0) / 260);
+      audio.volume = vol * (1 - k);
+      if(k < 1) return requestAnimationFrame(down);
+      audio.src = src;
+      audio.currentTime = 0;
+      play();
+      window.currentTrackName = name || "";
+      var t1 = performance.now();
+      (function up(){
+        var k2 = Math.min(1, (performance.now() - t1) / 320);
+        audio.volume = vol * k2;
+        if(k2 < 1) requestAnimationFrame(up);
+      })();
+      paint();
+    })();
+  };
+
+  if(btn){
+    btn.addEventListener("click", function(e){
+      e.stopPropagation();
+      wantSound = audio.muted || audio.paused;
+      if(wantSound){ audio.muted = false; play(); }
+      else { audio.muted = true; }
+      paint();
+    });
+  }
+  audio.addEventListener("play", paint);
+  audio.addEventListener("pause", paint);
+  paint();
+})();
+</script>
+<script>
+/* ---- загрузчик: экран загрузки, честный прогресс, потом запуск сайта ----
+   Данные и раскладка лежат отдельно (их правит админка), поэтому сначала
+   тянем их, затем библиотеку и код, и только потом убираем заставку. */
+(function(){
+  var elLoad  = document.getElementById("ayLoad");
+  var elFill  = document.getElementById("ayLoadFill");
+  var elNum   = document.getElementById("ayLoadN");
+  var elEnter = document.getElementById("ayEnter");
+
+  /* вес каждого шага — чтобы полоса шла честно, а не по таймеру */
+  var STEPS = { data:12, three:34, main:30, font:8, first:16 };
+  var done = 0, total = 0, shown = 0;
+  for(var k in STEPS) total += STEPS[k];
+
+  function step(name){
+    done += STEPS[name] || 0;
+    var pct = Math.min(100, Math.round(done / total * 100));
+    if(pct > shown){
+      shown = pct;
+      elFill.style.width = pct + "%";
+      elNum.textContent = pct + "%";
+    }
+  }
+
   function inject(id, obj){
     var s = document.createElement("script");
-    s.type = "application/json";
-    s.id = id;
+    s.type = "application/json"; s.id = id;
     s.textContent = JSON.stringify(obj);
     document.head.appendChild(s);
   }
@@ -1283,8 +1435,14 @@ addEventListener("load",function(){
       return r.json();
     });
   }
-  /* сначала спрашиваем сервер (там лежат правки из админки),
-     если его нет — читаем файлы из папки data */
+
+  /* шрифт заголовков — чтобы первый экран не мигнул подменой */
+  if(document.fonts && document.fonts.load){
+    document.fonts.load("400 100px Anton").then(function(){ step("font"); })
+      .catch(function(){ step("font"); });
+  } else { step("font"); }
+
+  /* сначала сервер (там правки из админки), иначе файлы из папки data */
   getJSON("api/data")
     .then(function(d){
       if(!d || !d.site) throw new Error("пустой ответ");
@@ -1295,13 +1453,50 @@ addEventListener("load",function(){
       return Promise.all([ getJSON("data/site.json"), getJSON("data/desk.json") ])
         .then(function(d){ inject("SITE_DATA", d[0]); inject("DESK_LAYOUT", d[1]); });
     })
-    .catch(function(e){
-      console.warn("Данные не загрузились, включаю запасные:", e.message);
-      inject("SITE_DATA", {});
-      inject("DESK_LAYOUT", {});
+    .then(function(){ step("data"); return load("js/three.min.js"); })
+    .then(function(){ step("three"); return load("js/main.js"); })
+    .then(function(){
+      step("main");
+      /* ждём первый настоящий кадр, иначе заставка уйдёт в пустоту */
+      return new Promise(function(res){
+        requestAnimationFrame(function(){ requestAnimationFrame(function(){
+          setTimeout(res, 260);
+        }); });
+      });
     })
-    .then(function(){ return load("js/main.js"); })
-    .catch(function(e){ console.error("Сайт не запустился:", e); });
+    .then(function(){
+      step("first");
+      elFill.style.width = "100%";
+      elNum.textContent = "100%";
+      ready();
+    })
+    .catch(function(e){
+      console.error("Сайт не запустился:", e);
+      elNum.textContent = "ошибка загрузки";
+      ready();
+    });
+
+  /* Кнопка нужна не для красоты: клик — это разрешение браузера на звук,
+     без него музыка может стартовать только беззвучно. */
+  function ready(){
+    elEnter.classList.add("on");
+    elEnter.addEventListener("click", enter);
+    document.addEventListener("keydown", function onKey(e){
+      if(e.key === "Enter" || e.key === " "){ document.removeEventListener("keydown", onKey); enter(); }
+    });
+  }
+  var entered = false;
+  function enter(){
+    if(entered) return;
+    entered = true;
+    if(window.startSiteAudio) startSiteAudio();      /* музыка со звуком */
+    elLoad.classList.add("gone");
+    setTimeout(function(){
+      if(elLoad.parentNode) elLoad.remove();
+      var v = document.getElementById("ayLoadV");
+      if(v){ v.pause(); v.removeAttribute("src"); v.load(); }
+    }, 600);
+  }
 })();
 </script>
 </body>

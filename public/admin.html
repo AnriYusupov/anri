@@ -90,6 +90,33 @@ input[type=range]{width:100%}
 .mini .tag{position:absolute;left:3px;bottom:3px;font-size:9px;padding:1px 4px;border-radius:4px;
   background:rgba(0,0,0,.7)}
 
+/* ---------- предпросмотр окошка, как на сайте ---------- */
+#qlPrev{border-radius:14px;overflow:hidden;background:rgba(28,28,32,.96);
+  box-shadow:0 24px 60px -20px rgba(0,0,0,.8),0 0 0 .5px rgba(255,255,255,.28),
+             0 1px 0 rgba(255,255,255,.35) inset}
+#qlPrev .qpbar{display:flex;align-items:center;gap:8px;padding:11px 14px;
+  background:linear-gradient(180deg,rgba(255,255,255,.13),rgba(255,255,255,.04));
+  border-bottom:.5px solid rgba(255,255,255,.16)}
+#qlPrev .l{width:11px;height:11px;border-radius:50%;display:block;
+  box-shadow:0 0 0 .5px rgba(0,0,0,.25) inset}
+#qlPrev .l.r{background:#ff5f57}#qlPrev .l.y{background:#febc2e}#qlPrev .l.g{background:#28c840}
+#qlPrev .qpt{margin-left:10px;font-size:12px;font-weight:600;letter-spacing:.04em;
+  color:rgba(255,255,255,.86);text-transform:uppercase;white-space:nowrap;overflow:hidden;
+  text-overflow:ellipsis}
+#qlPrev .qpbody{aspect-ratio:16/9;background:#000;display:flex;align-items:center;
+  justify-content:center;color:#3a3f48;font-size:12px;position:relative;overflow:hidden}
+#qlPrev .qpover{position:absolute;left:0;right:0;bottom:0;padding:20px 22px 16px;
+  background:linear-gradient(180deg,rgba(0,0,0,0) 0%,rgba(0,0,0,.30) 42%,rgba(0,0,0,.72) 100%)}
+#qlPrev .qpname{font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue",Helvetica,Arial,sans-serif;
+  font-weight:700;letter-spacing:-.022em;line-height:1.06;color:#fff;font-size:22px;max-width:74%;
+  text-shadow:0 2px 14px rgba(0,0,0,.55)}
+#qlPrev .qpmeta{margin-top:7px;font-size:11px;color:rgba(255,255,255,.72)}
+#qlPrev.long .qpname{color:#ffb4b4}
+#qlPrev .qpbody img,#qlPrev .qpbody video{width:100%;height:100%;object-fit:cover}
+#qlPrev .qpfoot{display:flex;justify-content:space-between;padding:10px 14px;font-size:11px;
+  letter-spacing:.09em;color:rgba(255,255,255,.62);text-transform:uppercase;font-weight:600}
+#qlPrev.long .qpt{color:#ffb4b4}
+
 /* ---------- кейсы ---------- */
 .two{display:grid;grid-template-columns:250px 1fr;gap:18px;align-items:start}
 .blk{background:var(--panel2);border:1px solid var(--line);border-radius:11px;padding:12px;margin-bottom:9px}
@@ -168,6 +195,7 @@ input[type=range]{width:100%}
           <div class="add">
             <button id="addFolder">+ Папка</button>
             <button id="addWork">+ Работа</button>
+            <button id="addTrack">+ Трек</button>
             <button id="alignCol">Выровнять в колонку</button>
           </div>
           <label>Размер значков — <b id="szv">76</b> px</label>
@@ -235,7 +263,8 @@ input[type=range]{width:100%}
       <label class="btn" style="margin:0">Загрузить<input type="file" id="upFile" hidden></label>
       <button class="btn" id="mClose">Закрыть</button>
     </div>
-    <div class="hint" id="upHint" style="margin-bottom:12px"></div>
+    <div class="hint" id="upHint" style="margin-bottom:6px"></div>
+    <div id="upStat" style="margin-bottom:12px;font-size:13px;min-height:18px"></div>
     <div class="mini" id="mediaGrid"></div>
   </div>
 </div>
@@ -251,6 +280,7 @@ var sel = -1;              /* выбранный значок стола */
 var curProj = 0;
 var dirty = false;
 var pickTarget = null;     /* куда положить выбранный файл */
+var pickWant = null;       /* какой тип файла ждём */
 
 var $  = function(s){ return document.querySelector(s); };
 var $$ = function(s){ return Array.prototype.slice.call(document.querySelectorAll(s)); };
@@ -353,18 +383,24 @@ function renderAll(){ drawDesk(); drawIconList(); drawDock(); drawProjects(); dr
 /* ============================================================
    РАБОЧИЙ СТОЛ
    ============================================================ */
+var TRACK_ICON = "data:image/svg+xml," + encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">' +
+  '<rect width="64" height="64" rx="13" fill="#1d1f26"/>' +
+  '<path d="M40 15v26.5a7.5 7.5 0 1 1-4-6.6V22l-14 3.2v20.3a7.5 7.5 0 1 1-4-6.6V21l22-6z" fill="#fff"/></svg>');
 var FOLDER_ICON = "data:image/svg+xml," + encodeURIComponent(
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 52">' +
   '<path d="M3 9a5 5 0 0 1 5-5h16l6 7h26a5 5 0 0 1 5 5v31a5 5 0 0 1-5 5H8a5 5 0 0 1-5-5z" fill="#4a90d9"/>' +
   '<path d="M3 18h58v25a5 5 0 0 1-5 5H8a5 5 0 0 1-5-5z" fill="#63a6e8"/></svg>');
 
 function iconImage(it){
+  if(it.type === "track")  return it.cover || TRACK_ICON;
   if(it.type === "folder") return it.cover || FOLDER_ICON;
   var p = (DATA.site.projects || [])[it.ref || 0];
   return (p && (p.cover || p.coverHover)) || FOLDER_ICON;
 }
 function iconLabel(it){
   if(it.label) return it.label;
+  if(it.type === "track") return "Трек";
   var p = (DATA.site.projects || [])[it.ref || 0];
   return (p && p.title) || "Без имени";
 }
@@ -443,7 +479,7 @@ function drawIconList(){
     d.innerHTML = '<img src="' + iconImage(it) + '"><span class="nm"></span>' +
                   '<button title="Удалить">✕</button>';
     d.querySelector(".nm").textContent =
-      (it.type === "folder" ? "📁 " : "") + iconLabel(it);
+      (it.type === "folder" ? "📁 " : it.type === "track" ? "♪ " : "") + iconLabel(it);
     d.addEventListener("click", function(e){
       if(e.target.tagName === "BUTTON") return;
       sel = i; drawDesk(); drawIconList(); drawSel();
@@ -467,7 +503,25 @@ function drawSel(){
 
   add("Подпись", "text", it.label || "", function(v){ it.label = v; touch(); drawDesk(); drawIconList(); });
 
-  if(it.type === "folder"){
+  if(it.type === "track"){
+    body.appendChild(mediaField("Файл трека (mp3)", it.src || "", function(v){
+      it.src = v; touch();
+    }, "audio"));
+    body.appendChild(mediaField("Своя обложка (необязательно)", it.cover || "", function(v){
+      it.cover = v; touch(); drawDesk(); drawIconList();
+    }, "image"));
+    var st = document.createElement("div");
+    st.innerHTML = '<label style="display:flex;gap:8px;align-items:center;margin-top:12px">' +
+      '<input type="checkbox"> Этот трек играет при входе на сайт</label>';
+    var cb = st.querySelector("input");
+    cb.checked = !!it.startup;
+    cb.addEventListener("change", function(){
+      DATA.desk.icons.forEach(function(x){ if(x.type === "track") x.startup = false; });
+      it.startup = cb.checked;
+      touch(); drawSel();
+    });
+    body.appendChild(st);
+  } else if(it.type === "folder"){
     var h = document.createElement("div");
     h.innerHTML = '<label>Файлы внутри папки</label>';
     body.appendChild(h);
@@ -545,6 +599,13 @@ $("#addFolder").addEventListener("click", function(){
 $("#addWork").addEventListener("click", function(){
   if(!DATA.site.projects.length) return alert("Сначала создайте проект на вкладке «Кейсы».");
   DATA.desk.icons.push({ type:"work", ref:0, x:2.2, y:13.5 });
+  sel = DATA.desk.icons.length - 1;
+  touch(); drawDesk(); drawIconList(); drawSel();
+});
+$("#addTrack").addEventListener("click", function(){
+  var name = prompt("Название трека:", "Новый трек");
+  if(!name) return;
+  DATA.desk.icons.push({ type:"track", label:name, x:88, y:40, src:"", startup:false });
   sel = DATA.desk.icons.length - 1;
   touch(); drawDesk(); drawIconList(); drawSel();
 });
@@ -629,7 +690,10 @@ function drawProjEdit(){
   card.innerHTML =
     '<h2>Карточка проекта</h2>' +
     '<div class="grid2">' +
-      '<div><label>Название</label><input type="text" data-f="title"></div>' +
+      '<div><label>Короткое название — подпись под значком</label>' +
+        '<input type="text" data-f="title" placeholder="DOHA\'S 2024"></div>' +
+      '<div><label>Полное название — в окошке превью и на странице кейса</label>' +
+        '<input type="text" data-f="fullTitle" placeholder="если пусто, возьмётся короткое"></div>' +
       '<div><label>Адрес страницы (латиницей)</label><input type="text" data-f="slug"></div>' +
       '<div><label>Категория</label><input type="text" data-f="category" placeholder="AI FILM, CGI…"></div>' +
       '<div><label>Клиент</label><input type="text" data-f="client" placeholder="PERSONAL или имя клиента"></div>' +
@@ -657,15 +721,89 @@ function drawProjEdit(){
     });
   });
 
+  /* живой предпросмотр окошка */
+  var pv = document.createElement("div");
+  pv.className = "card";
+  pv.style.marginTop = "16px";
+  pv.innerHTML =
+    '<h2>Так это выглядит при наведении на значок</h2>' +
+    '<div style="display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap">' +
+      '<div style="flex:1;min-width:300px;max-width:430px">' +
+        '<div id="qlPrev">' +
+          '<div class="qpbar"><span class="l r"></span><span class="l y"></span>' +
+            '<span class="l g"></span><span class="qpt"></span></div>' +
+          '<div class="qpbody"><span class="qpempty">нет обложки</span>' +'<div class="qpover"><div class="qpname"></div><div class="qpmeta"></div></div></div>' +
+          '<div class="qpfoot"><span class="qpy"></span><span class="qpc"></span></div>' +
+        '</div>' +
+      '</div>' +
+      '<div style="flex:1;min-width:230px">' +
+        '<div class="hint" id="qpNote"></div>' +
+        '<label style="margin-top:16px">Подпись под значком на столе</label>' +
+        '<div style="display:inline-block;padding:10px 12px;border-radius:9px;background:#0b0c0f;text-align:center">' +
+          '<div style="width:46px;height:46px;border-radius:8px;background:#2a2e37;margin:0 auto"></div>' +
+          '<div id="qpCap" style="margin-top:6px;font-size:10.5px;color:#fff;line-height:1.2;' +
+               'max-width:100px;word-break:break-word"></div>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  host.appendChild(pv);
+
+  function paintPreview(){
+    var full  = p.fullTitle || p.title || "";   /* как написано, регистр не меняем */
+    var short = (p.title || "").toUpperCase();
+    pv.querySelector(".qpt").textContent = short || "НАЗВАНИЕ";
+    pv.querySelector(".qpname").textContent = full || "Название проекта";
+    pv.querySelector(".qpmeta").textContent =
+      [p.category, p.year].filter(Boolean).join(" · ");
+    pv.querySelector(".qpy").textContent = p.year || "";
+    pv.querySelector(".qpc").textContent = (p.client || "").toUpperCase();
+    pv.querySelector("#qpCap").textContent = short || "название";
+
+    var body = pv.querySelector(".qpbody");
+    var over = pv.querySelector(".qpover");
+    Array.prototype.slice.call(body.querySelectorAll("img,video,.qpempty"))
+      .forEach(function(n){ n.remove(); });
+    if(p.coverVideo){
+      var v = document.createElement("video");
+      v.src = p.coverVideo; v.muted = true; v.loop = true; v.autoplay = true;
+      v.setAttribute("playsinline", "");
+      body.insertBefore(v, over);
+    } else if(p.cover){
+      var im = document.createElement("img");
+      im.src = p.cover;
+      body.insertBefore(im, over);
+    } else {
+      var e = document.createElement("span");
+      e.className = "qpempty";
+      e.textContent = "нет обложки";
+      body.insertBefore(e, over);
+    }
+
+    /* подсказка по длине: в полосу окна влезает примерно 46 знаков */
+    var n = full.length;
+    pv.querySelector("#qlPrev").classList.toggle("long", n > 60);
+    pv.querySelector("#qpNote").innerHTML = n > 60
+      ? "<b style=\'color:#ffb4b4\'>Длинновато — " + n + " знаков.</b> Красиво ложится " +
+        "примерно до 60: дальше строка займёт три ряда и полезет на кадр."
+      : "Полное название: " + n + " знаков. Хорошо смотрится до 60 — это две строки поверх кадра." +
+        "<br><br>Короткое лучше держать в пределах 14 знаков, иначе подпись под значком уедет в две строки.";
+  }
+  paintPreview();
+  card.querySelectorAll("[data-f]").forEach(function(inp){
+    inp.addEventListener("input", paintPreview);
+  });
+
   /* обложки */
   var cov = document.createElement("div");
   cov.className = "card";
   cov.style.marginTop = "16px";
   cov.innerHTML = '<h2>Обложка</h2>';
   host.appendChild(cov);
-  [["cover","Картинка на столе и в превью"],
-   ["coverVideo","Видео в превью (необязательно)"]].forEach(function(f){
-    cov.appendChild(mediaField(f[1], p[f[0]] || "", function(v){ p[f[0]] = v; touch(); drawDesk(); drawProjects(); }));
+  [["cover","Картинка на столе и в превью","image"],
+   ["coverVideo","Видео в превью (необязательно)","video"]].forEach(function(f){
+    cov.appendChild(mediaField(f[1], p[f[0]] || "", function(v){
+      p[f[0]] = v; touch(); drawDesk(); drawProjects(); paintPreview();
+    }, f[2]));
   });
 
   /* блоки */
@@ -742,11 +880,11 @@ function blockEditor(p, b, i){
   else if(b.type === "text")  textField("Абзац", "text", true);
   else if(b.type === "quote") textField("Цитата", "text", true);
   else if(b.type === "image"){
-    w.appendChild(mediaField("Картинка", b.src || "", function(v){ b.src = v; touch(); }));
+    w.appendChild(mediaField("Картинка", b.src || "", function(v){ b.src = v; touch(); }, "image"));
     textField("Подпись под картинкой", "caption");
   }
   else if(b.type === "video"){
-    w.appendChild(mediaField("Видеофайл", b.src || "", function(v){ b.src = v; touch(); }));
+    w.appendChild(mediaField("Видеофайл", b.src || "", function(v){ b.src = v; touch(); }, "video"));
     textField("Подпись", "caption");
   }
   else if(b.type === "twoImages"){
@@ -843,7 +981,7 @@ function blockEditor(p, b, i){
 }
 
 /* поле «файл + кнопка выбора» */
-function mediaField(label, value, on){
+function mediaField(label, value, on, want){
   var d = document.createElement("div");
   d.innerHTML = '<label>' + label + '</label><div class="pick">' +
     '<img class="thumb"><input type="text" placeholder="media/… или ссылка">' +
@@ -853,7 +991,7 @@ function mediaField(label, value, on){
   inp.value = value || ""; show(value);
   inp.addEventListener("input", function(){ show(inp.value); on(inp.value); });
   btn.addEventListener("click", function(){
-    openMedia(function(url){ inp.value = url; show(url); on(url); });
+    openMedia(function(url){ inp.value = url; show(url); on(url); }, want);
   });
   return d;
 }
@@ -861,15 +999,27 @@ function mediaField(label, value, on){
 /* ============================================================
    Выбор медиа
    ============================================================ */
-function openMedia(cb){
+function openMedia(cb, want){
   pickTarget = cb;
+  pickWant = want || null;
+  var inp = $("#upFile");
+  inp.accept = want === "video" ? "video/*" : (want === "image" ? "image/*" : "");
+  $("#upStat").textContent = "";
   var g = $("#mediaGrid");
   g.innerHTML = "";
+  var shown = 0;
   MEDIA.forEach(function(m){
-    if(m.kind === "font" || m.kind === "audio") return;
+    if(m.kind === "font") return;
+    if(pickWant){ if(m.kind !== pickWant) return; }  /* в поле видео — только видео */
+    else if(m.kind === "audio") return;
+    shown++;
     var f = document.createElement("figure");
     f.innerHTML = m.kind === "video"
       ? '<video src="' + m.url + '" muted></video><span class="tag">видео</span>'
+      : m.kind === "audio"
+      ? '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;' +
+        'background:#1d1f26;color:#fff;font-size:22px">&#9834;</div>' +
+        '<span class="tag">' + m.url.split("/").pop().slice(0, 10) + '</span>'
       : '<img src="' + m.url + '" loading="lazy">';
     f.addEventListener("click", function(){
       if(pickTarget) pickTarget(m.url, m.kind, m.url.split("/").pop());
@@ -877,6 +1027,17 @@ function openMedia(cb){
     });
     g.appendChild(f);
   });
+  if(!shown){
+    var e = document.createElement("div");
+    e.className = "hint";
+    e.style.gridColumn = "1/-1";
+    e.textContent = pickWant === "video"
+      ? "Видео на сайте пока нет — нажмите «Загрузить» и выберите файл."
+      : pickWant === "audio"
+      ? "Музыки пока нет — нажмите «Загрузить» и выберите mp3."
+      : "Подходящих файлов пока нет — нажмите «Загрузить».";
+    g.appendChild(e);
+  }
   $("#modal").classList.add("on");
 }
 function closeMedia(){ $("#modal").classList.remove("on"); pickTarget = null; }
@@ -885,19 +1046,50 @@ $("#modal").addEventListener("click", function(e){ if(e.target.id === "modal") c
 
 $("#upFile").addEventListener("change", function(){
   var f = this.files && this.files[0];
+  this.value = "";
   if(!f) return;
+
+  var stat = $("#upStat");
+  var mb = (f.size / 1048576).toFixed(1);
+  var isVideo = f.type.indexOf("video") === 0;
+
+  /* сразу отсекаем очевидные ошибки, чтобы человек не ждал впустую */
+  var isAudio = f.type.indexOf("audio") === 0;
+  if(pickWant === "video" && !isVideo){
+    stat.style.color = "var(--accent)";
+    stat.textContent = "Это не видео (" + (f.type || "неизвестный тип") + "). Нужен файл .mp4";
+    return;
+  }
+  if(pickWant === "audio" && !isAudio){
+    stat.style.color = "var(--accent)";
+    stat.textContent = "Это не музыка (" + (f.type || "неизвестный тип") + "). Нужен файл .mp3";
+    return;
+  }
+  if(f.size > 100 * 1048576){
+    stat.style.color = "var(--accent)";
+    stat.textContent = "Файл " + mb + " МБ — больше предела в 100 МБ. Сожмите видео и попробуйте снова.";
+    return;
+  }
+
+  stat.style.color = "var(--dim)";
+  stat.textContent = "Загружаю «" + f.name + "» (" + mb + " МБ)… для видео это может занять минуту.";
+  say("Загружаю " + f.name + "…");
+
   var fd = new FormData();
   fd.append("file", f);
-  say("Загружаю " + f.name + "…");
   api("upload", { method:"POST", body: fd })
     .then(function(r){
-      MEDIA.unshift({ url:r.url, kind: f.type.indexOf("video") === 0 ? "video" : "image", bytes:r.bytes });
+      MEDIA.unshift({ url:r.url, kind: isVideo ? "video" : (isAudio ? "audio" : "image"), bytes:r.bytes });
+      stat.style.color = "var(--ok)";
+      stat.textContent = "Готово: " + f.name;
       say("Файл загружен", "ok");
-      if(pickTarget){ pickTarget(r.url); closeMedia(); }
-      else openMedia(pickTarget);
+      if(pickTarget){ pickTarget(r.url, isVideo ? "video" : (isAudio ? "audio" : "image"), f.name); closeMedia(); }
     })
-    .catch(function(e){ say(e.message, "err"); });
-  this.value = "";
+    .catch(function(e){
+      stat.style.color = "var(--accent)";
+      stat.textContent = "Не загрузилось: " + e.message;
+      say(e.message, "err");
+    });
 });
 
 /* ============================================================
