@@ -107,7 +107,7 @@ async function loadData(env, request) {
 }
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const path = url.pathname;
 
@@ -185,15 +185,78 @@ export default {
         return json({ ok: true, url: `api/media/${key}`, name: file.name, bytes: file.size });
       }
 
-      if (route.startsWith("media/") && method === "GET") {
+      /* Отдача файлов из хранилища.
+         Видео браузер качает кусками (заголовок Range) — без поддержки этого
+         ролик грузится целиком и играть начинает с большой задержкой либо вовсе
+         не запускается. Поэтому обрабатываем частичные запросы честно. */
+      if (route.startsWith("media/") && (method === "GET" || method === "HEAD")) {
         if (!env.MEDIA) return new Response("Хранилище не подключено", { status: 501 });
-        const obj = await env.MEDIA.get(route.slice("media/".length));
+        const key = route.slice("media/".length);
+        const range = request.headers.get("range");
+
+        /* Кэш на границе сети. Файл из хранилища тянется один раз, дальше его
+           отдаёт ближайший к зрителю сервер Cloudflare — так же быстро, как
+           обычная статика. Для запросов кусками кэш умеет резать сам. */
+        const cache = caches.default;
+        const hit = await cache.match(request);
+        if (hit) return hit;
+
+        if (method === "HEAD") {
+          const head = await env.MEDIA.head(key);
+          if (!head) return new Response("Не найдено", { status: 404 });
+          const h = new Headers();
+          head.writeHttpMetadata(h);
+          h.set("etag", head.httpEtag);
+          h.set("accept-ranges", "bytes");
+          h.set("content-length", String(head.size));
+          h.set("cache-control", "public, max-age=31536000, immutable");
+          return new Response(null, { headers: h });
+        }
+
+        if (range) {
+          const m = /bytes=(\d*)-(\d*)/.exec(range);
+          if (m) {
+            const head = await env.MEDIA.head(key);
+            if (!head) return new Response("Не найдено", { status: 404 });
+            const size = head.size;
+            let start = m[1] ? parseInt(m[1], 10) : 0;
+            let end = m[2] ? parseInt(m[2], 10) : size - 1;
+            if (isNaN(start) || start < 0) start = 0;
+            if (isNaN(end) || end >= size) end = size - 1;
+            if (start > end) {
+              return new Response("Диапазон вне файла", {
+                status: 416,
+                headers: { "content-range": `bytes */${size}` },
+              });
+            }
+            const part = await env.MEDIA.get(key, {
+              range: { offset: start, length: end - start + 1 },
+            });
+            if (!part) return new Response("Не найдено", { status: 404 });
+            const h = new Headers();
+            part.writeHttpMetadata(h);
+            h.set("etag", part.httpEtag);
+            h.set("accept-ranges", "bytes");
+            h.set("content-range", `bytes ${start}-${end}/${size}`);
+            h.set("content-length", String(end - start + 1));
+            h.set("cache-control", "public, max-age=31536000, immutable");
+            const partRes = new Response(part.body, { status: 206, headers: h });
+            if (ctx && ctx.waitUntil) ctx.waitUntil(cache.put(request, partRes.clone()));
+            return partRes;
+          }
+        }
+
+        const obj = await env.MEDIA.get(key);
         if (!obj) return new Response("Не найдено", { status: 404 });
         const h = new Headers();
         obj.writeHttpMetadata(h);
         h.set("etag", obj.httpEtag);
+        h.set("accept-ranges", "bytes");
+        h.set("content-length", String(obj.size));
         h.set("cache-control", "public, max-age=31536000, immutable");
-        return new Response(obj.body, { headers: h });
+        const full = new Response(obj.body, { headers: h });
+        if (ctx && ctx.waitUntil) ctx.waitUntil(cache.put(request, full.clone()));
+        return full;
       }
 
       return json({ error: "Неизвестный маршрут" }, 404);

@@ -621,8 +621,10 @@ function openFolder(folder){
     var media;
     if(f.kind === "video"){
       media = document.createElement("video");
-      media.src = f.src; media.muted = true; media.loop = true;
+        media.muted = true; media.loop = true;
       media.playsInline = true; media.autoplay = true;
+      media.preload = "metadata";        /* сначала только заголовок, не весь файл */
+      media.src = f.src;
     } else {
       media = document.createElement("img");
       media.src = f.src;
@@ -735,8 +737,10 @@ function renderBlocks(blocks, host){
       w.appendChild(g2);
       if(b.caption) w.appendChild(el("div","cb-cap",b.caption)); }
     else if(b.type==="video"){ w.className="cb cb-vid";
-      if(b.src){ var v=el("video"); v.src=b.src; v.controls=true; v.muted=true; v.loop=true; v.playsInline=true;
-        v.setAttribute("playsinline",""); w.appendChild(v); }
+      if(b.src){ var v=el("video"); v.controls=true; v.muted=true; v.loop=true; v.playsInline=true;
+        v.preload="metadata";              /* тянем заголовок, а не весь ролик */
+        if(b.poster) v.poster=b.poster;
+        v.setAttribute("playsinline",""); v.src=b.src; w.appendChild(v); }
       if(b.caption) w.appendChild(el("div","cb-cap",b.caption)); }
     else if(b.type==="embed"){ w.className="cb";
       var e2=el("div","cb-embed"); var f=el("iframe"); f.src=embedURL(b.url); f.allow="autoplay; fullscreen; picture-in-picture";
