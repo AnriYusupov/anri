@@ -202,11 +202,18 @@ input[type=range]{width:100%}
           </div>
           <label>Размер значков — <b id="szv">76</b> px</label>
           <input type="range" id="iconSize" min="40" max="130" step="2">
+          <label>Отступ колонок от края — <b id="edv">26</b> px</label>
+          <input type="range" id="edgeVal" min="0" max="60" step="1">
         </div>
 
         <div class="card" id="selCard" style="margin-bottom:16px;display:none">
           <h2>Выбранный значок</h2>
           <div id="selBody"></div>
+        </div>
+
+        <div class="card" style="margin-bottom:16px">
+          <h2>Подписи под значками</h2>
+          <div id="capBox"></div>
         </div>
 
         <div class="card">
@@ -382,7 +389,7 @@ $$("nav button").forEach(function(b){
   });
 });
 
-function renderAll(){ drawDesk(); drawIconList(); drawDock(); drawTrash(); drawProjects(); drawTexts(); }
+function renderAll(){ drawDesk(); drawIconList(); drawCapPanel(); drawDock(); drawTrash(); drawProjects(); drawTexts(); }
 
 /* ============================================================
    РАБОЧИЙ СТОЛ
@@ -416,13 +423,17 @@ function drawDesk(){
   var size = DATA.desk.iconSize || 76;
   $("#iconSize").value = size;
   $("#szv").textContent = size;
+  var edgeNow = (DATA.desk.edge != null ? DATA.desk.edge : 26);
+  $("#edgeVal").value = edgeNow;
+  $("#edv").textContent = edgeNow;
 
   DATA.desk.icons.forEach(function(it, i){
     var d = document.createElement("div");
     d.className = "di" + (i === sel ? " sel" : "") +
       (it.type === "track" && !it.src ? " nofile" : "");
     var boxW = 104, padX = Math.round((boxW - Math.round(size * 0.62)) / 2);
-    var edge = Math.round(26 * (st.clientWidth / 1440));   /* тот же отступ в масштабе макета */
+    var edgePx = (DATA.desk.edge != null ? DATA.desk.edge : 26);
+    var edge = Math.round(edgePx * (st.clientWidth / 1440));   /* тот же отступ в масштабе макета */
     if(it.snap === "left"){
       d.style.left = (edge - padX) + "px";
     } else if(it.snap === "right"){
@@ -437,6 +448,7 @@ function drawDesk(){
     im.style.width = im.style.height = Math.round(size * 0.62) + "px";
     var sp = document.createElement("span");
     sp.textContent = iconLabel(it);
+    sp.setAttribute("style", capCSS() + ";margin-top:5px;max-width:100px;word-break:break-word");
     d.appendChild(im); d.appendChild(sp);
     st.appendChild(d);
     dragIcon(d, i);
@@ -664,6 +676,11 @@ function drawSel(){
   }
 }
 
+$("#edgeVal").addEventListener("input", function(){
+  DATA.desk.edge = +this.value;
+  $("#edv").textContent = this.value;
+  touch(); drawDesk();
+});
 $("#iconSize").addEventListener("input", function(){
   DATA.desk.iconSize = +this.value;
   $("#szv").textContent = this.value;
@@ -722,6 +739,166 @@ $("#alignCol").addEventListener("click", function(){
   touch(); drawDesk(); drawIconList(); drawSel();
   say("Колонки выровнены — нажмите «Сохранить»", "ok");
 });
+
+/* ---- настройки подписей под значками ---- */
+function capCfg(){
+  DATA.desk.cap = DATA.desk.cap || {};
+  var c = DATA.desk.cap;
+  if(c.color == null)       c.color = "#ffffff";
+  if(c.size == null)        c.size = 10.5;
+  if(c.weight == null)      c.weight = 600;
+  if(c.track == null)       c.track = 5.5;
+  if(c.bg == null)          c.bg = true;
+  if(c.bgColor == null)     c.bgColor = "#0c0c0e";
+  if(c.bgOpacity == null)   c.bgOpacity = 52;
+  if(c.blur == null)        c.blur = true;
+  if(c.shadow == null)      c.shadow = true;
+  if(c.shadowPower == null) c.shadowPower = 70;
+  return c;
+}
+
+function capCSS(){
+  var c = capCfg();
+  function rgb(hx){
+    var m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hx || "");
+    return m ? [parseInt(m[1],16), parseInt(m[2],16), parseInt(m[3],16)] : [12,12,14];
+  }
+  var b = rgb(c.bgColor);
+  return "color:" + c.color + ";font-size:" + c.size + "px;font-weight:" + c.weight +
+         ";letter-spacing:" + (c.track/100).toFixed(3) + "em;" +
+         "background:" + (c.bg ? "rgba(" + b[0] + "," + b[1] + "," + b[2] + "," + (c.bgOpacity/100).toFixed(2) + ")" : "transparent") + ";" +
+         (c.bg && c.blur ? "backdrop-filter:blur(3px);" : "") +
+         "text-shadow:" + (c.shadow ? "0 1px 4px rgba(0,0,0," + (c.shadowPower/100).toFixed(2) + ")" : "none") + ";" +
+         "padding:2px 6px;border-radius:6px;display:inline-block;line-height:1.3";
+}
+
+function drawCapPanel(){
+  var box = $("#capBox");
+  if(!box) return;
+  var c = capCfg();
+  box.innerHTML = "";
+
+  function row(label, html){
+    var d = document.createElement("div");
+    d.innerHTML = '<label>' + label + '</label>' + html;
+    box.appendChild(d);
+    return d;
+  }
+  function apply(){ touch(); drawDesk(); paintCapPreview(); }
+
+  /* цвет текста */
+  var r1 = row('Цвет текста',
+    '<div style="display:flex;gap:8px;align-items:center">' +
+    '<input type="color" style="width:46px;height:32px;padding:2px;background:var(--panel2);' +
+      'border:1px solid var(--line);border-radius:7px">' +
+    '<input type="text" style="flex:1"></div>');
+  var col = r1.querySelector('input[type=color]'), colT = r1.querySelector('input[type=text]');
+  col.value = c.color; colT.value = c.color;
+  col.addEventListener("input", function(){ c.color = col.value; colT.value = col.value; apply(); });
+  colT.addEventListener("input", function(){ c.color = colT.value; col.value = colT.value; apply(); });
+
+  /* размер, насыщенность, разрядка */
+  var r2 = row('Размер — <b>' + c.size + '</b> px',
+    '<input type="range" min="8" max="20" step="0.5">');
+  var sz = r2.querySelector("input"); sz.value = c.size;
+  sz.addEventListener("input", function(){
+    c.size = +sz.value; r2.querySelector("b").textContent = sz.value; apply();
+  });
+
+  var r3 = row('Насыщенность шрифта',
+    '<select><option value="400">Обычный</option><option value="600">Полужирный</option>' +
+    '<option value="700">Жирный</option><option value="800">Очень жирный</option></select>');
+  var wt = r3.querySelector("select"); wt.value = String(c.weight);
+  wt.addEventListener("change", function(){ c.weight = +wt.value; apply(); });
+
+  var r4 = row('Разрядка букв — <b>' + c.track + '</b>',
+    '<input type="range" min="0" max="20" step="0.5">');
+  var tr = r4.querySelector("input"); tr.value = c.track;
+  tr.addEventListener("input", function(){
+    c.track = +tr.value; r4.querySelector("b").textContent = tr.value; apply();
+  });
+
+  /* подложка */
+  var r5 = document.createElement("div");
+  r5.innerHTML = '<label style="display:flex;gap:8px;align-items:center;margin-top:14px">' +
+    '<input type="checkbox"> Подложка под текстом</label>';
+  var bgOn = r5.querySelector("input"); bgOn.checked = !!c.bg;
+  bgOn.addEventListener("change", function(){ c.bg = bgOn.checked; drawCapPanel(); apply(); });
+  box.appendChild(r5);
+
+  if(c.bg){
+    var r6 = row('Цвет подложки',
+      '<div style="display:flex;gap:8px;align-items:center">' +
+      '<input type="color" style="width:46px;height:32px;padding:2px;background:var(--panel2);' +
+        'border:1px solid var(--line);border-radius:7px">' +
+      '<input type="text" style="flex:1"></div>');
+    var bc = r6.querySelector('input[type=color]'), bcT = r6.querySelector('input[type=text]');
+    bc.value = c.bgColor; bcT.value = c.bgColor;
+    bc.addEventListener("input", function(){ c.bgColor = bc.value; bcT.value = bc.value; apply(); });
+    bcT.addEventListener("input", function(){ c.bgColor = bcT.value; bc.value = bcT.value; apply(); });
+
+    var r7 = row('Плотность подложки — <b>' + c.bgOpacity + '</b> %',
+      '<input type="range" min="0" max="100" step="1">');
+    var op = r7.querySelector("input"); op.value = c.bgOpacity;
+    op.addEventListener("input", function(){
+      c.bgOpacity = +op.value; r7.querySelector("b").textContent = op.value; apply();
+    });
+
+    var r8 = document.createElement("div");
+    r8.innerHTML = '<label style="display:flex;gap:8px;align-items:center">' +
+      '<input type="checkbox"> Размывать фон под подложкой</label>';
+    var bl = r8.querySelector("input"); bl.checked = !!c.blur;
+    bl.addEventListener("change", function(){ c.blur = bl.checked; apply(); });
+    box.appendChild(r8);
+  }
+
+  /* тень */
+  var r9 = document.createElement("div");
+  r9.innerHTML = '<label style="display:flex;gap:8px;align-items:center;margin-top:14px">' +
+    '<input type="checkbox"> Тень под буквами</label>';
+  var shOn = r9.querySelector("input"); shOn.checked = !!c.shadow;
+  shOn.addEventListener("change", function(){ c.shadow = shOn.checked; drawCapPanel(); apply(); });
+  box.appendChild(r9);
+
+  if(c.shadow){
+    var r10 = row('Сила тени — <b>' + c.shadowPower + '</b> %',
+      '<input type="range" min="0" max="100" step="5">');
+    var sp = r10.querySelector("input"); sp.value = c.shadowPower;
+    sp.addEventListener("input", function(){
+      c.shadowPower = +sp.value; r10.querySelector("b").textContent = sp.value; apply();
+    });
+  }
+
+  /* образец на трёх фонах — сразу видно, читается ли */
+  var prev = document.createElement("div");
+  prev.innerHTML = '<label style="margin-top:14px">Как выглядит на разных обоях</label>' +
+    '<div id="capPrev" style="display:flex;gap:8px">' +
+      '<div data-bg="#f2f2f2"></div><div data-bg="#8a8a8a"></div><div data-bg="#0b0b0d"></div>' +
+    '</div>';
+  box.appendChild(prev);
+  paintCapPreview();
+
+  var reset = document.createElement("button");
+  reset.className = "btn";
+  reset.style.marginTop = "12px";
+  reset.textContent = "Вернуть как было";
+  reset.addEventListener("click", function(){
+    DATA.desk.cap = { color:"#ffffff", size:10.5, weight:600, track:5.5,
+      bg:true, bgColor:"#0c0c0e", bgOpacity:52, blur:true, shadow:true, shadowPower:70 };
+    drawCapPanel(); apply();
+  });
+  box.appendChild(reset);
+}
+
+function paintCapPreview(){
+  var host = $("#capPrev");
+  if(!host) return;
+  Array.prototype.forEach.call(host.children, function(cell){
+    cell.style.cssText = "flex:1;padding:12px 6px;border-radius:8px;text-align:center;" +
+      "background:" + cell.dataset.bg + ";border:1px solid var(--line)";
+    cell.innerHTML = '<span style="' + capCSS() + '">SIGNAL</span>';
+  });
+}
 
 function drawDock(){
   var box = $("#dockList");

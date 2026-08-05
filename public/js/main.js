@@ -174,6 +174,43 @@ var LAYOUT = (function(){
 })();
 
 var ICON_PX = LAYOUT.iconSize || 76;
+var EDGE = (LAYOUT.edge != null ? LAYOUT.edge : 26);   /* отступ прижатых колонок от края */
+
+/* ---- вид подписей под значками (настраивается в админке) ---- */
+var CAP = LAYOUT.cap || {};
+(function(){
+  function num(v, d){ return (v == null || isNaN(v)) ? d : +v; }
+  var color   = CAP.color || "#ffffff";
+  var size    = num(CAP.size, 10.5);
+  var weight  = num(CAP.weight, 600);
+  var track   = num(CAP.track, 5.5) / 100;
+  var bgOn    = CAP.bg !== false;
+  var bgColor = CAP.bgColor || "#0c0c0e";
+  var bgOp    = num(CAP.bgOpacity, 52) / 100;
+  var shOn    = CAP.shadow !== false;
+  var shPow   = num(CAP.shadowPower, 70) / 100;
+  var blurOn  = CAP.blur !== false;
+
+  function hexToRgb(hx){
+    var m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hx || "");
+    return m ? [parseInt(m[1],16), parseInt(m[2],16), parseInt(m[3],16)] : [12,12,14];
+  }
+  var c = hexToRgb(bgColor);
+
+  var css = "#deskPane .dicon .cap{" +
+    "color:" + color + ";" +
+    "font-size:" + size + "px;" +
+    "font-weight:" + weight + ";" +
+    "letter-spacing:" + track.toFixed(3) + "em;" +
+    "background:" + (bgOn ? "rgba(" + c[0] + "," + c[1] + "," + c[2] + "," + bgOp.toFixed(2) + ")" : "transparent") + ";" +
+    (bgOn && blurOn ? "backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);" : "backdrop-filter:none;-webkit-backdrop-filter:none;") +
+    "text-shadow:" + (shOn ? "0 1px 4px rgba(0,0,0," + shPow.toFixed(2) + ")" : "none") + ";" +
+    "}";
+  var st = document.createElement("style");
+  st.id = "capStyle";
+  st.textContent = css;
+  document.head.appendChild(st);
+})();
 
 var TRACK_SRC = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='13' fill='%231d1f26'/%3E%3Crect x='.5' y='.5' width='63' height='63' rx='12.5' fill='none' stroke='rgba(255,255,255,.18)'/%3E%3Cpath d='M40 15v26.5a7.5 7.5 0 1 1-4-6.6V22l-14 3.2v20.3a7.5 7.5 0 1 1-4-6.6V21l22-6z' fill='%23fff'/%3E%3C/svg%3E";
 var FOLDER_SRC = "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20200%20164%22%3E%3Cdefs%3E%3ClinearGradient%20id%3D%22b%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%220%22%20y2%3D%221%22%3E%3Cstop%20offset%3D%220%22%20stop-color%3D%22%2357a9f2%22%2F%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22%232f7fdd%22%2F%3E%3C%2FlinearGradient%3E%3ClinearGradient%20id%3D%22f%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%220%22%20y2%3D%221%22%3E%3Cstop%20offset%3D%220%22%20stop-color%3D%22%2393cdff%22%2F%3E%3Cstop%20offset%3D%220.55%22%20stop-color%3D%22%2357a4f0%22%2F%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22%233d8ce4%22%2F%3E%3C%2FlinearGradient%3E%3C%2Fdefs%3E%3Cpath%20d%3D%22M10%2036a14%2014%200%200%201%2014-14h44a10%2010%200%200%201%207%203l17%2017h84a14%2014%200%200%201%2014%2014v78a14%2014%200%200%201-14%2014H24a14%2014%200%200%201-14-14z%22%20fill%3D%22url%28%23b%29%22%2F%3E%3Cpath%20d%3D%22M10%2062a14%2014%200%200%201%2014-14h152a14%2014%200%200%201%2014%2014v72a14%2014%200%200%201-14%2014H24a14%2014%200%200%201-14-14z%22%20fill%3D%22url%28%23f%29%22%2F%3E%3Cpath%20d%3D%22M10%2062a14%2014%200%200%201%2014-14h152a14%2014%200%200%201%2014%2014v6H10z%22%20fill%3D%22%23ffffff%22%20opacity%3D%22.22%22%2F%3E%3C%2Fsvg%3E";
@@ -190,10 +227,10 @@ var FOLDER_SRC = "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org
     /* snap — привязка к тому же отступу, что у логотипа и меню (26 px),
        чтобы колонка стояла ровно под ними на любом экране */
     if(it.snap === "left"){
-      d.style.left = (26 - padX) + "px";
+      d.style.left = (EDGE - padX) + "px";
     } else if(it.snap === "right"){
       d.style.left = "auto";
-      d.style.right = (26 - padX) + "px";
+      d.style.right = (EDGE - padX) + "px";
     } else {
       d.style.left = "calc(" + it.x + "% - " + padX + "px)";
     }
