@@ -183,9 +183,22 @@ var FOLDER_SRC = "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org
     var it = LAYOUT.icons[i];
     var d = document.createElement("div");
     d.className = "dicon";
-    d.style.left = it.x + "%";
+    /* Значок центрируется внутри рамки, поэтому от x отнимаем половину лишней
+       ширины — тогда x задаёт левый край самой картинки, а не край рамки. */
+    var boxW = Math.round(ICON_PX * 1.37);
+    var padX = Math.round((boxW - ICON_PX) / 2);
+    /* snap — привязка к тому же отступу, что у логотипа и меню (26 px),
+       чтобы колонка стояла ровно под ними на любом экране */
+    if(it.snap === "left"){
+      d.style.left = (26 - padX) + "px";
+    } else if(it.snap === "right"){
+      d.style.left = "auto";
+      d.style.right = (26 - padX) + "px";
+    } else {
+      d.style.left = "calc(" + it.x + "% - " + padX + "px)";
+    }
     d.style.top  = it.y + "%";
-    d.style.width = Math.round(ICON_PX*1.37) + "px";
+    d.style.width = boxW + "px";
 
     var img = document.createElement("img");
     img.className = "thumb";

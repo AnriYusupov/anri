@@ -60,7 +60,7 @@ input[type=range]{width:100%}
 /* ---------- стол ---------- */
 #stage{position:relative;width:100%;aspect-ratio:16/10;border:1px solid var(--line);
   border-radius:12px;overflow:hidden;background:#111 center/cover no-repeat;user-select:none}
-.di{position:absolute;width:104px;margin-left:-52px;margin-top:-38px;text-align:center;cursor:grab;
+.di{position:absolute;width:104px;margin-top:-38px;text-align:center;cursor:grab;
   padding:6px 4px;border-radius:9px;transform:translateZ(0)}
 .di.sel{background:rgba(255,255,255,.14);outline:1px solid rgba(255,255,255,.45)}
 .di.nofile img{outline:2px solid var(--warn);border-radius:8px}
@@ -421,7 +421,16 @@ function drawDesk(){
     var d = document.createElement("div");
     d.className = "di" + (i === sel ? " sel" : "") +
       (it.type === "track" && !it.src ? " nofile" : "");
-    d.style.left = (it.x || 0) + "%";
+    var boxW = 104, padX = Math.round((boxW - Math.round(size * 0.62)) / 2);
+    var edge = Math.round(26 * (st.clientWidth / 1440));   /* тот же отступ в масштабе макета */
+    if(it.snap === "left"){
+      d.style.left = (edge - padX) + "px";
+    } else if(it.snap === "right"){
+      d.style.left = "auto";
+      d.style.right = (edge - padX) + "px";
+    } else {
+      d.style.left = "calc(" + (it.x || 0) + "% - " + padX + "px)";
+    }
     d.style.top  = (it.y || 0) + "%";
     var im = document.createElement("img");
     im.src = iconImage(it);
@@ -466,6 +475,8 @@ function dragIcon(node, idx){
       }
       it.x = Math.max(0, Math.min(97, +x.toFixed(2)));
       it.y = Math.max(0, Math.min(97, +y.toFixed(2)));
+      delete it.snap;                    /* потянули руками — привязка снимается */
+      live.style.right = "";
       live.style.left = it.x + "%";
       live.style.top  = it.y + "%";
     }
@@ -512,9 +523,10 @@ function alignColumn(anchor, mode){
   if(col.length < 2 && mode !== "spread"){ say("В этой колонке только один значок", "err"); return; }
 
   if(mode === "logo"){
-    /* шапка отступает от края на те же 2,2 % — ставим колонку ровно под ней */
-    var lx = rightSide ? 90.6 : 2.2;
-    col.forEach(function(i){ i.x = lx; });
+    /* привязываем колонку к тому же краю, что логотип и меню — 26 px.
+       Это не проценты, поэтому на любом экране совпадёт точно. */
+    var side = rightSide ? "right" : "left";
+    col.forEach(function(i){ i.snap = side; });
   }
   if(mode === "left" || mode === "right"){
     var x = anchor.x || 0;

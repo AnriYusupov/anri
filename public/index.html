@@ -36,8 +36,12 @@
   opacity:1;transition:opacity .5s ease}
 #ayLoad.gone{opacity:0;pointer-events:none}
 #ayLoadV{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
-#ayLoadC{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;
-  justify-content:center;mix-blend-mode:difference;color:#fff}
+/* Слой с надписью смешивается с фоном в режиме Difference. Раньше он занимал
+   весь экран — и браузер каждый кадр пересчитывал смешивание с 4K-картинкой,
+   теряя аппаратный вывод видео и подвисая. Теперь слой размером с сам текст. */
+#ayLoadC{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  mix-blend-mode:difference;color:#fff;will-change:opacity}
 #ayLoadT{font-family:'Anton',"Helvetica Neue",Helvetica,Arial,sans-serif;font-size:24px;
   letter-spacing:.42em;padding-left:.42em;line-height:1;text-transform:uppercase}
 #ayLoadBar{margin-top:16px;width:170px;height:1px;background:rgba(255,255,255,.30)}
