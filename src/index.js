@@ -58,12 +58,41 @@ async function isAuthed(request, env) {
   return diff === 0;
 }
 
-/* Данные: сперва KV (правки из админки), иначе файлы из сборки */
+/* ---- где лежат правки ----
+   Храним их в R2: он задаётся именем корзины, а не номером, поэтому конфиг
+   не приходится править руками. Если подключено KV — используем его (так было
+   раньше, старые правки не потеряются). */
+async function readStore(env, key) {
+  if (env.SITE_KV) {
+    const v = await env.SITE_KV.get(key);
+    if (v) return v;
+  }
+  if (env.MEDIA) {
+    const obj = await env.MEDIA.get("site-data/" + key + ".json");
+    if (obj) return await obj.text();
+  }
+  return null;
+}
+
+async function writeStore(env, key, text) {
+  if (env.MEDIA) {
+    await env.MEDIA.put("site-data/" + key + ".json", text, {
+      httpMetadata: { contentType: "application/json; charset=utf-8" },
+    });
+    return true;
+  }
+  if (env.SITE_KV) {
+    await env.SITE_KV.put(key, text);
+    return true;
+  }
+  return false;
+}
+
 async function loadData(env, request) {
   const url = new URL(request.url);
   const out = {};
   for (const [key, file] of [["site", "/data/site.json"], ["desk", "/data/desk.json"]]) {
-    let text = env.SITE_KV ? await env.SITE_KV.get(key) : null;
+    let text = await readStore(env, key);
     if (!text) {
       try {
         const res = await env.ASSETS.fetch(new Request(url.origin + file));
@@ -121,19 +150,20 @@ export default {
 
       if (route === "save" && method === "POST") {
         if (!(await isAuthed(request, env))) return json({ error: "Нужен вход" }, 401);
-        if (!env.SITE_KV) return json({ error: "Хранилище SITE_KV не подключено" }, 500);
+        if (!env.MEDIA && !env.SITE_KV)
+          return json({ error: "Хранилище не подключено" }, 500);
         const body = await request.json().catch(() => null);
         if (!body || typeof body !== "object") return json({ error: "Плохой запрос" }, 400);
 
         if (body.site) {
           if (!Array.isArray(body.site.projects))
             return json({ error: "site.projects должен быть списком" }, 400);
-          await env.SITE_KV.put("site", JSON.stringify(body.site));
+          await writeStore(env, "site", JSON.stringify(body.site));
         }
         if (body.desk) {
           if (!Array.isArray(body.desk.icons))
             return json({ error: "desk.icons должен быть списком" }, 400);
-          await env.SITE_KV.put("desk", JSON.stringify(body.desk));
+          await writeStore(env, "desk", JSON.stringify(body.desk));
         }
         return json({ ok: true, savedAt: new Date().toISOString() });
       }

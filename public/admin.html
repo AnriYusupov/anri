@@ -210,6 +210,7 @@ input[type=range]{width:100%}
         <div class="card">
           <h2>Док</h2>
           <div class="list" id="dockList"></div>
+        <div id="trashBox"></div>
           <label>Масштаб дока — <b id="dsv">1.00</b></label>
           <input type="range" id="dockScale" min="0.5" max="1.4" step="0.05">
         </div>
@@ -378,7 +379,7 @@ $$("nav button").forEach(function(b){
   });
 });
 
-function renderAll(){ drawDesk(); drawIconList(); drawDock(); drawProjects(); drawTexts(); }
+function renderAll(){ drawDesk(); drawIconList(); drawDock(); drawTrash(); drawProjects(); drawTexts(); }
 
 /* ============================================================
    РАБОЧИЙ СТОЛ
@@ -627,9 +628,17 @@ function drawDock(){
     d.innerHTML = '<img src="' + (it.src || "") + '"><span class="nm"></span>' +
                   '<button data-a="up">↑</button><button data-a="down">↓</button><button data-a="del">✕</button>';
     d.querySelector(".nm").textContent = it.t || it.k;
+    if(it.k === "trash"){
+      var edit = document.createElement("button");
+      edit.textContent = "фото";
+      edit.title = "Что лежит в корзине";
+      edit.dataset.a = "trash";
+      d.insertBefore(edit, d.querySelector("button[data-a='up']"));
+    }
     d.addEventListener("click", function(e){
       var a = e.target.dataset && e.target.dataset.a;
       if(!a) return;
+      if(a === "trash"){ trashSel = i; drawTrash(); return; }
       if(a === "del"){ dock.items.splice(i, 1); }
       if(a === "up" && i > 0){ dock.items.splice(i - 1, 0, dock.items.splice(i, 1)[0]); }
       if(a === "down" && i < dock.items.length - 1){ dock.items.splice(i + 1, 0, dock.items.splice(i, 1)[0]); }
@@ -642,6 +651,54 @@ function drawDock(){
 /* ============================================================
    КЕЙСЫ
    ============================================================ */
+var trashSel = -1;
+function drawTrash(){
+  var box = $("#trashBox");
+  box.innerHTML = "";
+  var dock = DATA.desk.dock || {};
+  var it = (dock.items || [])[trashSel];
+  if(!it || it.k !== "trash"){ return; }
+  it.items = it.items || [];
+
+  var head = document.createElement("div");
+  head.innerHTML = '<label style="margin-top:14px">Что лежит в корзине — ' +
+                   it.items.length + ' шт.</label>';
+  box.appendChild(head);
+
+  var list = document.createElement("div");
+  list.className = "list";
+  it.items.forEach(function(f, k){
+    var r = document.createElement("div");
+    r.className = "item";
+    r.innerHTML = '<img src="' + (f.src || "") + '"><span class="nm"></span><button>✕</button>';
+    r.querySelector(".nm").textContent = f.name || (f.src || "").split("/").pop();
+    r.querySelector("button").addEventListener("click", function(){
+      it.items.splice(k, 1); touch(); drawTrash(); drawDock();
+    });
+    list.appendChild(r);
+  });
+  box.appendChild(list);
+
+  var add = document.createElement("button");
+  add.className = "btn";
+  add.style.marginTop = "9px";
+  add.textContent = "+ Добавить фото или видео";
+  add.addEventListener("click", function(){
+    openMedia(function(url, kind, name){
+      it.items.push({ src:url, kind:kind, name:name });
+      touch(); drawTrash(); drawDock();
+    });
+  });
+  box.appendChild(add);
+
+  var hint = document.createElement("div");
+  hint.className = "hint";
+  hint.style.marginTop = "9px";
+  hint.textContent = "Клик по корзине в доке откроет её на сайте. " +
+                     "Хорошее место для отвергнутых вариантов и черновиков.";
+  box.appendChild(hint);
+}
+
 function drawProjects(){
   var box = $("#projList");
   box.innerHTML = "";

@@ -6,5 +6,8 @@
     "directory": "./public",
     "binding": "ASSETS"
   },
+  "r2_buckets": [
+    { "binding": "MEDIA", "bucket_name": "anri-media" }
+  ],
   "observability": { "enabled": true }
 }

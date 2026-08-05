@@ -531,7 +531,7 @@ function hideApp(){
     for(var q=0;q<LD.items.length;q++){
       var itm = LD.items[q];
       if(itm.k === "trash" && q > 0) built.push({k:"sep"});
-      built.push({k:itm.k, t:itm.t || itm.k, run: itm.k !== "trash"});
+      built.push({k:itm.k, t:itm.t || itm.k, run: itm.k !== "trash", items: itm.items || []});
       if(itm.src) ICON_SRC[itm.k] = itm.src;
     }
     DOCK = built;
@@ -552,10 +552,18 @@ function hideApp(){
     var dot = document.createElement("div"); dot.className="dot";
     wrap.appendChild(ic); wrap.appendChild(dot);
     dockEl.appendChild(wrap);
-    (function(key, node){
+    (function(key, node, item){
       node.addEventListener("mouseenter", function(){ showApp(key, node); });
       node.addEventListener("mouseleave", hideApp);
-    })(DOCK[k].k, wrap);
+      /* корзина открывается как папка — туда складываются отвергнутые идеи */
+      if(key === "trash"){
+        node.style.cursor = "pointer";
+        node.addEventListener("click", function(){
+          hideApp();
+          openFolder({ label: "Trash", items: item.items || [] });
+        });
+      }
+    })(DOCK[k].k, wrap, DOCK[k]);
   }
   /* macOS dock magnification: neighbours swell around the pointer */
   var dockItems = dockEl.querySelectorAll(".dockitem");
@@ -575,7 +583,10 @@ function hideApp(){
 
 
 /* медиа рабочего стола */
-document.getElementById("deskAudio").src = "media/bbfe5b9a8c.mp3";
+(function(){                       /* трек по умолчанию — но не сбрасываем, если уже играет */
+  var a = document.getElementById("deskAudio");
+  if(a && !a.getAttribute("src")) a.src = "media/bbfe5b9a8c.mp3";
+})();
 /* музыка вынесена в index.html — она стартует с заставки, а не с рабочего стола */
 
 
@@ -899,7 +910,7 @@ document.getElementById("logo").addEventListener("click", function(){
     el.addEventListener("mouseenter", function(){ play(el); });
     el.addEventListener("mouseleave", function(){ if(active===el) clear(); });
   }
-  ["#navWork","#navAbout","#navContact","#logo"].forEach(function(sel){ bind(document.querySelector(sel)); });
+  ["#navWork","#navAbout","#navContact","#logo","#sndTop"].forEach(function(sel){ bind(document.querySelector(sel)); });
   Array.prototype.forEach.call(document.querySelectorAll(".clist a"), bind);
   Array.prototype.forEach.call(document.querySelectorAll("#scene .meta .t"), bind);
   window.addEventListener("scroll", function(){ if(active) clear(); }, {passive:true});

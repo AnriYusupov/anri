@@ -1,3 +1,13 @@
+/* ---------- кнопка звука: пункт меню наравне с WORK ---------- */
+#sndTop{display:flex;align-items:center;gap:6px;color:#fff;font-family:'Anton';font-size:12px;
+  letter-spacing:1.2px;cursor:pointer;white-space:nowrap;opacity:.62;transition:opacity .2s;
+  background:none;border:0;padding:0;pointer-events:auto;position:relative}
+#sndTop:hover{opacity:1}
+#sndTop.on{opacity:1}
+#sndTop i{width:9px;height:9px;display:block;background:currentColor;
+  clip-path:polygon(0 34%,28% 34%,58% 5%,58% 95%,28% 66%,0 66%)}
+#sndTop.on i{box-shadow:0 0 8px rgba(255,255,255,.7)}
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -21,22 +31,12 @@
 .dicon.dtrack .thumb{border-radius:11px}
 .dicon.dtrack.playing .thumb{box-shadow:0 0 0 2px rgba(255,255,255,.85),0 8px 22px -6px rgba(0,0,0,.8)}
 .dicon.dtrack.playing .cap::after{content:" ▶";font-size:.85em;opacity:.9}
-/* ---------- кнопка звука в шапке: набор как у WORK / ABOUT ---------- */
-#sndTop{position:absolute;left:26px;top:64px;display:flex;align-items:center;gap:7px;
-  background:none;border:0;padding:0;cursor:pointer;pointer-events:auto;color:#fff;
-  font-family:'Anton',"Helvetica Neue",Helvetica,Arial,sans-serif;font-size:12px;
-  letter-spacing:1.2px;white-space:nowrap;opacity:.55;transition:opacity .2s}
-#sndTop:hover{opacity:1}
-#sndTop.on{opacity:1}
-#sndTop i{width:9px;height:9px;display:block;background:currentColor;
-  clip-path:polygon(0 34%,28% 34%,58% 5%,58% 95%,28% 66%,0 66%)}
-#sndTop.on i{box-shadow:0 0 8px rgba(255,255,255,.7)}
-@media (max-width:640px){#sndTop{top:58px;font-size:11px}}
 /* ---------- экран загрузки ---------- */
 #ayLoad{position:fixed;inset:0;z-index:9999;background:#000;overflow:hidden;
   opacity:1;transition:opacity .5s ease}
 #ayLoad.gone{opacity:0;pointer-events:none}
-#ayLoadV{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+#ayLoadV{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;
+  background:#000 center/cover no-repeat}
 #ayLoadC{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;
   justify-content:center;mix-blend-mode:difference;color:#fff}
 #ayLoadT{font-family:'Anton',"Helvetica Neue",Helvetica,Arial,sans-serif;font-size:24px;
@@ -325,8 +325,10 @@ body.gl #scene.gridmode .frame > img,body.gl #scene.gridmode .frame > video{opac
 </style>
 </head>
 <body>
+<audio id="deskAudio" loop preload="auto"></audio>
 <div id="ayLoad">
-  <video id="ayLoadV" autoplay muted loop playsinline preload="auto" src="media/loader.mp4"></video>
+  <video id="ayLoadV" autoplay muted loop playsinline preload="auto"
+         poster="media/loader_poster.jpg" data-src="media/loader.mp4"></video>
   <div id="ayLoadC">
     <div id="ayLoadT">LOADING</div>
     <div id="ayLoadBar"><div id="ayLoadFill"></div></div>
@@ -360,7 +362,6 @@ body.gl #scene.gridmode .frame > img,body.gl #scene.gridmode .frame > video{opac
     </div>
     <canvas id="appCan" aria-hidden="true"></canvas>
     <div id="dock"></div>
-    <audio id="deskAudio" loop preload="auto"></audio>
   </section>
 
   <!-- black scene with project boxes -->
@@ -388,8 +389,8 @@ body.gl #scene.gridmode .frame > img,body.gl #scene.gridmode .frame > video{opac
 
 <header id="topbar">
   <div id="logo" tabindex="0" role="button" aria-label="Back to top"><span>ANRI</span><span>YUSUPOV</span></div>
-  <button id="sndTop" type="button" aria-label="Звук"><i></i><span>SOUND OFF</span></button>
   <nav id="nav">
+    <a id="sndTop" data-text="Sound"><i></i><span>SOUND OFF</span></a>
     <a id="navWork">WORK</a>
     <a id="navAbout">ABOUT</a>
     <a id="navContact">CONTACT</a>
@@ -1436,6 +1437,27 @@ addEventListener("load",function(){
     });
   }
 
+  /* Ролик 4K весит много, поэтому играем его потоком: браузер начинает показ,
+     как только пришли первые кадры, и догружает остальное по ходу. Сайт при этом
+     грузится параллельно и заставку не ждёт. */
+  var vid = document.getElementById("ayLoadV");
+  function startClip(){
+    if(!vid || vid.getAttribute("src")) return;
+    vid.src = vid.dataset.src;          /* ролик подключаем отдельно от кода сайта */
+    var p = vid.play(); if(p && p.catch) p.catch(function(){});
+  }
+  if(vid){
+    vid.addEventListener("loadeddata", function(){
+      var p = vid.play(); if(p && p.catch) p.catch(function(){});
+    });
+    vid.addEventListener("error", function(){
+      /* ролик не пошёл — остаётся кадр-заглушка, заставка не ломается */
+      vid.style.background = "#000 url(media/loader_poster.jpg) center/cover no-repeat";
+    });
+  }
+
+  setTimeout(startClip, 1200);   /* страховка, если данные задержались */
+
   /* шрифт заголовков — чтобы первый экран не мигнул подменой */
   if(document.fonts && document.fonts.load){
     document.fonts.load("400 100px Anton").then(function(){ step("font"); })
@@ -1453,7 +1475,7 @@ addEventListener("load",function(){
       return Promise.all([ getJSON("data/site.json"), getJSON("data/desk.json") ])
         .then(function(d){ inject("SITE_DATA", d[0]); inject("DESK_LAYOUT", d[1]); });
     })
-    .then(function(){ step("data"); return load("js/three.min.js"); })
+    .then(function(){ step("data"); startClip(); return load("js/three.min.js"); })
     .then(function(){ step("three"); return load("js/main.js"); })
     .then(function(){
       step("main");
