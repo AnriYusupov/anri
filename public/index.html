@@ -258,6 +258,36 @@ body.gl #scene.gridmode .frame > img,body.gl #scene.gridmode .frame > video{opac
   transition:opacity .3s}
 
 /* фон кейса рисуется дизерингом на канвасе — как на типографической стене */
+
+/* ---- фон кейса: тёмно-синие сгустки, движутся как лава-лампа ----
+   Медленно расходятся, наплывают друг на друга и в местах наложения светлеют. */
+#cvAur{position:fixed;inset:-25%;pointer-events:none;z-index:0;overflow:hidden;
+  filter:blur(100px)}
+#cvAur i{position:absolute;display:block;border-radius:50%;mix-blend-mode:screen;
+  will-change:transform}
+#cvAur i:nth-child(1){width:66vw;height:66vw;left:-10vw;top:-14vw;
+  background:radial-gradient(circle at 50% 50%, #1a2740 0%, #0e1626 42%, transparent 70%);
+  opacity:.5;animation:lavaA 64s ease-in-out infinite alternate}
+#cvAur i:nth-child(2){width:58vw;height:58vw;right:-8vw;top:4vh;
+  background:radial-gradient(circle at 50% 50%, #16223a 0%, #0c1322 44%, transparent 70%);
+  opacity:.46;animation:lavaB 82s ease-in-out infinite alternate}
+#cvAur i:nth-child(3){width:74vw;height:74vw;left:10vw;bottom:-28vw;
+  background:radial-gradient(circle at 50% 50%, #131f33 0%, #0a1120 45%, transparent 72%);
+  opacity:.48;animation:lavaC 98s ease-in-out infinite alternate}
+#cvAur i:nth-child(4){width:52vw;height:52vw;right:8vw;bottom:6vh;
+  background:radial-gradient(circle at 50% 50%, #1d2b45 0%, #0d1524 44%, transparent 70%);
+  opacity:.42;animation:lavaD 74s ease-in-out infinite alternate}
+#cvAur i:nth-child(5){width:62vw;height:62vw;left:28vw;top:18vh;
+  background:radial-gradient(circle at 50% 50%, #151f36 0%, #0b1120 46%, transparent 72%);
+  opacity:.4;animation:lavaE 110s ease-in-out infinite alternate}
+
+@keyframes lavaA{0%{transform:translate3d(0,0,0) scale(1)}     100%{transform:translate3d(38vw,26vh,0) scale(1.4)}}
+@keyframes lavaB{0%{transform:translate3d(0,0,0) scale(1.25)}  100%{transform:translate3d(-34vw,30vh,0) scale(.8)}}
+@keyframes lavaC{0%{transform:translate3d(0,0,0) scale(.9)}    100%{transform:translate3d(-36vw,-30vh,0) scale(1.45)}}
+@keyframes lavaD{0%{transform:translate3d(0,0,0) scale(1.2)}   100%{transform:translate3d(30vw,-32vh,0) scale(.78)}}
+@keyframes lavaE{0%{transform:translate3d(0,0,0) scale(1)}     100%{transform:translate3d(-26vw,24vh,0) scale(1.35)}}
+@media (prefers-reduced-motion: reduce){ #cvAur i{animation:none} }
+
 #caseView .cvinner,#caseView .cvbar{position:relative;z-index:1}
 #caseView.on{opacity:1;visibility:visible}
 
@@ -453,6 +483,7 @@ body.gl #scene.gridmode .frame > img,body.gl #scene.gridmode .frame > video{opac
 
 <!-- case page -->
 <div id="caseView" role="dialog" aria-modal="true">
+  <div id="cvAur" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
   <div class="cvbar">
     <button class="cvclose" data-caseclose>← НАЗАД</button>
     <div class="cvname"></div>
