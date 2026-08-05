@@ -835,7 +835,6 @@ function openCase(proj){
   renderBlocks(blocks, inner);
   caseView.querySelector(".cvscroll").scrollTop = 0;
   caseView.classList.add("on");
-  if(window.startCaseBg) startCaseBg();
   document.body.style.overflow = "hidden";
 }
 function closeCase(){
@@ -1246,64 +1245,6 @@ function drawTypeBg(now,t){
   tbgCtx.putImageData(tbBuf,0,0);
 }
 
-
-/* ---- фон страницы кейса: тот же дизеринг, что на типографической стене,
-   только медленнее и глуше, чтобы не спорил с работами ---- */
-(function(){
-  var cv = document.getElementById("cvBg");
-  if(!cv) return;
-  var cx = cv.getContext("2d", { willReadFrequently: true });
-  var W = 0, H = 0, buf = null, off = null, raf = null;
-
-  function size(){
-    var w = Math.max(200, Math.round(window.innerWidth / 4));   /* мельче сетка = мягче зерно */
-    var h = Math.max(120, Math.round(window.innerHeight / 4));
-    if(w === W && h === H) return;
-    W = w; H = h;
-    cv.width = W; cv.height = H;
-    cx.imageSmoothingEnabled = false;
-    buf = cx.createImageData(W, H);
-    var d = buf.data;
-    for(var i = 0; i < W * H; i++){
-      d[i*4] = 255; d[i*4+1] = 255; d[i*4+2] = 255;   /* белые точки, прозрачность решает узор */
-    }
-    off = new Float32Array(W);
-  }
-
-  function draw(now){
-    var T1 = now * 0.000035, T2 = now * 0.000022, T3 = now * 0.000048;
-    for(var x = 0; x < W; x++){
-      off[x] = Math.sin(x * 0.021 + T1) * 0.5 + Math.sin(x * 0.049 - T2) * 0.26 +
-               Math.sin(x * 0.009 + T3) * 0.4;
-    }
-    var d = buf.data;
-    for(var y = 0; y < H; y++){
-      var up = y / H;
-      /* плотность падает сверху вниз: вверху лёгкая дымка, внизу почти чисто */
-      var base = 0.04 + (1 - up) * (1 - up) * 0.22 + Math.sin(now * 0.00002 + up * 3.2) * 0.02;
-      var by = (y & 7) * 8;
-      for(var x2 = 0; x2 < W; x2++){
-        var lp = base - off[x2] * 0.045;
-        d[(y*W + x2)*4 + 3] = (BAYER[by + (x2 & 7)] / 64 < lp) ? 255 : 0;
-      }
-    }
-    cx.putImageData(buf, 0, 0);
-  }
-
-  function loop(now){
-    if(caseView && caseView.classList.contains("on")){
-      size();
-      draw(now);
-      raf = requestAnimationFrame(loop);
-    } else {
-      raf = null;                       /* кейс закрыт — не тратим кадры впустую */
-    }
-  }
-  window.startCaseBg = function(){
-    if(!raf){ size(); raf = requestAnimationFrame(loop); }
-  };
-  window.addEventListener("resize", function(){ W = 0; size(); });
-})();
 
 /* ---------------- cursor dot-cloud (dithered comet, cycling palette) ---------------- */
 var fx = document.getElementById("cursorFx");
