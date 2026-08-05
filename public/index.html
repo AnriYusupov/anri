@@ -281,8 +281,24 @@ body.gl #scene.gridmode .frame > img,body.gl #scene.gridmode .frame > video{opac
 @media (prefers-reduced-motion: reduce){ #cvAur i{animation:none} }
 
 #caseView .cvinner,#caseView .cvbar{position:relative;z-index:1}
-@media (prefers-reduced-motion: reduce){ #caseView::before{animation:none} }
 #caseView.on{opacity:1;visibility:visible}
+
+/* ---- появление блоков при прокрутке ----
+   Блок всплывает снизу с лёгким увеличением, картинки внутри — по очереди. */
+#caseView .cb{opacity:0;transform:translateY(34px) scale(.988);
+  transition:opacity .85s cubic-bezier(.16,.84,.28,1),
+             transform 1.05s cubic-bezier(.16,.84,.28,1)}
+#caseView .cb.in{opacity:1;transform:none}
+#caseView .cb-grid img,#caseView .cb-grid video{opacity:0;transform:translateY(26px) scale(.99);
+  transition:opacity .8s cubic-bezier(.16,.84,.28,1),
+             transform 1s cubic-bezier(.16,.84,.28,1)}
+#caseView .cb.in .cb-grid img,#caseView .cb.in .cb-grid video{opacity:1;transform:none}
+@media (prefers-reduced-motion: reduce){
+  #caseView .cb,#caseView .cb-grid img,#caseView .cb-grid video{
+    opacity:1;transform:none;transition:none}
+  #cvAur i{animation:none}
+}
+
 .cvbar{position:sticky;top:0;z-index:3;display:flex;align-items:center;gap:20px;padding:16px 26px;
   background:rgba(8,8,10,.82);backdrop-filter:blur(18px);border-bottom:1px solid rgba(255,255,255,.09)}
 .cvclose{background:none;border:1px solid rgba(255,255,255,.22);color:#fff;font:inherit;font-size:11px;font-weight:700;

@@ -818,6 +818,54 @@ function renderBlocks(blocks, host){
       var a=el("a",null,b.label||"Открыть"); a.href=b.href||"#"; a.target="_blank"; a.rel="noopener"; w.appendChild(a); }
     host.appendChild(w);
   });
+
+  revealBlocks(host);
+}
+
+/* ---- появление блоков при прокрутке страницы кейса ----
+   Следим за тем, что вошло в кадр, и показываем с небольшой задержкой друг за другом. */
+/* ищем, что именно прокручивается: страница или контейнер кейса */
+function scrollHost(node){
+  var el = node;
+  while(el && el !== document.body){
+    var ov = getComputedStyle(el).overflowY;
+    if((ov === "auto" || ov === "scroll") && el.scrollHeight > el.clientHeight + 4) return el;
+    el = el.parentElement;
+  }
+  return null;
+}
+
+function revealBlocks(host){
+  var items = host.querySelectorAll(".cb");
+  if(!("IntersectionObserver" in window)){
+    for(var q = 0; q < items.length; q++) items[q].classList.add("in");
+    return;
+  }
+  var io = new IntersectionObserver(function(entries){
+    entries.forEach(function(e){
+      if(!e.isIntersecting) return;
+      var el = e.target;
+      io.unobserve(el);
+      el.classList.add("in");
+      /* картинки внутри сетки выходят по очереди, а не разом */
+      var kids = el.querySelectorAll(".cb-grid img, .cb-grid video");
+      for(var k = 0; k < kids.length; k++){
+        kids[k].style.transitionDelay = (k * 0.09).toFixed(2) + "s";
+      }
+    });
+  }, { root: scrollHost(host), rootMargin: "0px 0px -12% 0px", threshold: 0.08 });
+
+  for(var i = 0; i < items.length; i++) io.observe(items[i]);
+
+  /* то, что уже видно при открытии, показываем сразу */
+  requestAnimationFrame(function(){
+    var box = scrollHost(host);
+    var bottom = box ? box.getBoundingClientRect().bottom : window.innerHeight;
+    for(var j = 0; j < items.length; j++){
+      var r = items[j].getBoundingClientRect();
+      if(r.top < bottom * 0.92) items[j].classList.add("in");
+    }
+  });
 }
 function openCase(proj){
   var src = (SITE.projects||[])[proj.index] || {};
