@@ -259,29 +259,38 @@ body.gl #scene.gridmode .frame > img,body.gl #scene.gridmode .frame > video{opac
 
 /* фон кейса рисуется дизерингом на канвасе — как на типографической стене */
 
-/* ---- фон кейса: четыре небольших тёмно-синих сгустка на чёрном ----
-   Между ними остаётся чистая чернота. Плывут медленно, иногда сходятся. */
-#cvAur{position:fixed;inset:-20%;pointer-events:none;z-index:0;overflow:hidden;
-  filter:blur(70px)}
-#cvAur i{position:absolute;display:block;border-radius:50%;mix-blend-mode:screen;
-  will-change:transform}
-#cvAur i:nth-child(1){width:22vw;height:22vw;left:8vw;top:12vh;
-  background:radial-gradient(circle at 50% 50%, #22344f 0%, #111c30 40%, transparent 64%);
-  opacity:.6;animation:lavaA 66s ease-in-out infinite alternate}
-#cvAur i:nth-child(2){width:19vw;height:19vw;right:12vw;top:26vh;
-  background:radial-gradient(circle at 50% 50%, #1b2b45 0%, #0d1626 42%, transparent 64%);
-  opacity:.55;animation:lavaB 84s ease-in-out infinite alternate}
-#cvAur i:nth-child(3){width:24vw;height:24vw;left:32vw;bottom:16vh;
-  background:radial-gradient(circle at 50% 50%, #1d2f4a 0%, #0e1828 42%, transparent 66%);
-  opacity:.55;animation:lavaC 98s ease-in-out infinite alternate}
-#cvAur i:nth-child(4){width:17vw;height:17vw;right:26vw;bottom:34vh;
-  background:radial-gradient(circle at 50% 50%, #26395a 0%, #101a2e 42%, transparent 64%);
-  opacity:.5;animation:lavaD 76s ease-in-out infinite alternate}
+/* ---- фон кейса: тёмная дымка ----
+   Не круги, а вытянутые размытые полосы: они медленно вращаются и растягиваются,
+   поэтому форма всё время разная и края не читаются. */
+#cvAur{position:fixed;inset:-30%;pointer-events:none;z-index:0;overflow:hidden;
+  filter:blur(110px)}
+#cvAur i{position:absolute;display:block;mix-blend-mode:screen;will-change:transform;
+  border-radius:50% 50% 50% 50% / 60% 40% 60% 40%}   /* неровная форма вместо круга */
+#cvAur i:nth-child(1){width:54vw;height:20vw;left:2vw;top:10vh;
+  background:radial-gradient(ellipse at 50% 50%, #22314c 0%, #101a2c 42%, transparent 72%);
+  opacity:.6;animation:smokeA 78s ease-in-out infinite alternate}
+#cvAur i:nth-child(2){width:46vw;height:17vw;right:0;top:34vh;
+  background:radial-gradient(ellipse at 50% 50%, #1b2a44 0%, #0d1626 44%, transparent 72%);
+  opacity:.5;animation:smokeB 96s ease-in-out infinite alternate}
+#cvAur i:nth-child(3){width:60vw;height:22vw;left:14vw;bottom:6vh;
+  background:radial-gradient(ellipse at 50% 50%, #1d2f4a 0%, #0e1828 44%, transparent 74%);
+  opacity:.52;animation:smokeC 112s ease-in-out infinite alternate}
+#cvAur i:nth-child(4){width:40vw;height:15vw;right:18vw;bottom:40vh;
+  background:radial-gradient(ellipse at 50% 50%, #27395a 0%, #101a2e 44%, transparent 72%);
+  opacity:.45;animation:smokeD 88s ease-in-out infinite alternate}
 
-@keyframes lavaA{0%{transform:translate3d(0,0,0) scale(1)}   100%{transform:translate3d(40vw,34vh,0) scale(1.4)}}
-@keyframes lavaB{0%{transform:translate3d(0,0,0) scale(1.25)}100%{transform:translate3d(-36vw,28vh,0) scale(.8)}}
-@keyframes lavaC{0%{transform:translate3d(0,0,0) scale(.85)} 100%{transform:translate3d(-30vw,-38vh,0) scale(1.35)}}
-@keyframes lavaD{0%{transform:translate3d(0,0,0) scale(1.15)}100%{transform:translate3d(34vw,-30vh,0) scale(.85)}}
+@keyframes smokeA{
+  0%  {transform:translate3d(0,0,0) rotate(-8deg) scale(1,1)}
+  100%{transform:translate3d(26vw,22vh,0) rotate(26deg) scale(1.35,.8)}}
+@keyframes smokeB{
+  0%  {transform:translate3d(0,0,0) rotate(14deg) scale(1.2,1)}
+  100%{transform:translate3d(-30vw,-18vh,0) rotate(-22deg) scale(.85,1.3)}}
+@keyframes smokeC{
+  0%  {transform:translate3d(0,0,0) rotate(6deg) scale(.9,1.1)}
+  100%{transform:translate3d(-22vw,-26vh,0) rotate(-18deg) scale(1.4,.75)}}
+@keyframes smokeD{
+  0%  {transform:translate3d(0,0,0) rotate(-20deg) scale(1.1,.9)}
+  100%{transform:translate3d(24vw,-20vh,0) rotate(18deg) scale(.8,1.25)}}
 @media (prefers-reduced-motion: reduce){ #cvAur i{animation:none} }
 
 #caseView .cvinner,#caseView .cvbar{position:relative;z-index:1}
