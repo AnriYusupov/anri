@@ -198,7 +198,7 @@ input[type=range]{width:100%}
             <button id="addFolder">+ Папка</button>
             <button id="addWork">+ Работа</button>
             <button id="addTrack">+ Трек</button>
-            <button id="alignCol">Выровнять в колонку</button>
+            <button id="alignCol">Выровнять всё под шапку</button>
           </div>
           <label>Размер значков — <b id="szv">76</b> px</label>
           <input type="range" id="iconSize" min="40" max="130" step="2">
@@ -704,9 +704,23 @@ $("#addTrack").addEventListener("click", function(){
   touch(); drawDesk(); drawIconList(); drawSel();
 });
 $("#alignCol").addEventListener("click", function(){
-  var works = DATA.desk.icons.filter(function(i){ return i.type !== "folder"; });
-  works.forEach(function(it, k){ it.x = 2.2; it.y = 13.5 + k * 11.8; });
-  touch(); drawDesk();
+  /* Прижимаем колонки к тем же краям, что логотип и меню (26 px),
+     и раздаём одинаковые отступы по высоте. */
+  var left  = DATA.desk.icons.filter(function(i){ return i.snap === "left"  || ((i.x || 0) <= 50 && i.snap !== "right"); });
+  var right = DATA.desk.icons.filter(function(i){ return i.snap === "right" || ((i.x || 0) >  50 && i.snap !== "left");  });
+
+  [[left, "left"], [right, "right"]].forEach(function(pair){
+    var col = pair[0];
+    if(!col.length) return;
+    col.forEach(function(i){ i.snap = pair[1]; });
+    col.sort(function(a, b){ return (a.y || 0) - (b.y || 0); });
+    var top = 13.5;
+    var step = col.length > 1 ? Math.min(11.8, (86 - top) / (col.length - 1)) : 0;
+    col.forEach(function(i, k){ i.y = +(top + step * k).toFixed(2); });
+  });
+
+  touch(); drawDesk(); drawIconList(); drawSel();
+  say("Колонки выровнены — нажмите «Сохранить»", "ok");
 });
 
 function drawDock(){
