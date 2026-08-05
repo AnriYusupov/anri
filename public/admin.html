@@ -137,6 +137,13 @@ input[type=range]{width:100%}
 .empty{padding:26px;text-align:center;color:var(--dim);font-size:13px;
   border:1px dashed var(--line);border-radius:11px}
 
+
+/* кнопки выключки */
+.alnRow{display:flex;gap:6px}
+.alnBtn{width:40px;height:32px;background:var(--panel2);border:1px solid var(--line);
+  border-radius:7px;color:var(--dim);font-size:14px;line-height:1}
+.alnBtn:hover{color:var(--ink)}
+.alnBtn.on{background:var(--ink);color:#111;border-color:var(--ink)}
 /* ---------- окно выбора медиа ---------- */
 #modal{position:fixed;inset:0;background:rgba(0,0,0,.72);display:none;align-items:center;
   justify-content:center;z-index:80;padding:24px}
@@ -1206,6 +1213,41 @@ function blockEditor(p, b, i){
     touch(); drawProjEdit();
   });
   w.appendChild(top);
+
+  /* выключка и ширина — как в фотошопе, у каждого блока своя */
+  if(["heading","text","quote","cta","stats","credits","twoCols"].indexOf(b.type) >= 0){
+    var al = document.createElement("div");
+    al.innerHTML = '<label>Выключка</label><div class="alnRow"></div>';
+    var row = al.querySelector(".alnRow");
+    [["left","Слева","⬅"],["center","По центру","⬌"],["right","Справа","➡"]].forEach(function(a){
+      var bt = document.createElement("button");
+      bt.type = "button";
+      bt.className = "alnBtn" + (((b.align || "left") === a[0]) ? " on" : "");
+      bt.title = a[1];
+      bt.textContent = a[2];
+      bt.addEventListener("click", function(){
+        b.align = a[0]; touch();
+        Array.prototype.forEach.call(row.children, function(x){ x.classList.remove("on"); });
+        bt.classList.add("on");
+      });
+      row.appendChild(bt);
+    });
+    w.appendChild(al);
+
+    if(b.type === "text" || b.type === "quote"){
+      var wd = document.createElement("div");
+      wd.innerHTML = '<label>Ширина колонки — <b>' + (b.width || "по умолчанию") + '</b></label>' +
+        '<input type="range" min="0" max="1100" step="20">';
+      var wi = wd.querySelector("input");
+      wi.value = b.width || 0;
+      wi.addEventListener("input", function(){
+        b.width = +wi.value || null;
+        wd.querySelector("b").textContent = b.width ? b.width + " px" : "по умолчанию";
+        touch();
+      });
+      w.appendChild(wd);
+    }
+  }
 
   function textField(label, field, big){
     var d = document.createElement("div");
