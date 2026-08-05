@@ -460,6 +460,10 @@ function dragIcon(node, idx){
     function move(ev){
       var x = (ev.clientX - offX - st.left) / st.width  * 100;
       var y = (ev.clientY - offY - st.top ) / st.height * 100;
+      if(!ev.altKey){                      /* прилипание к сетке; Alt — свободно */
+        x = Math.round(x * 2) / 2;         /* шаг 0,5 % по горизонтали */
+        y = Math.round(y * 2) / 2;
+      }
       it.x = Math.max(0, Math.min(97, +x.toFixed(2)));
       it.y = Math.max(0, Math.min(97, +y.toFixed(2)));
       live.style.left = it.x + "%";
@@ -499,6 +503,32 @@ function drawIconList(){
     });
     box.appendChild(d);
   });
+}
+
+function alignColumn(anchor, mode){
+  /* колонка — это значки той же половины экрана, что и выбранный */
+  var rightSide = (anchor.x || 0) > 50;
+  var col = DATA.desk.icons.filter(function(i){ return ((i.x || 0) > 50) === rightSide; });
+  if(col.length < 2 && mode !== "spread"){ say("В этой колонке только один значок", "err"); return; }
+
+  if(mode === "logo"){
+    /* шапка отступает от края на те же 2,2 % — ставим колонку ровно под ней */
+    var lx = rightSide ? 90.6 : 2.2;
+    col.forEach(function(i){ i.x = lx; });
+  }
+  if(mode === "left" || mode === "right"){
+    var x = anchor.x || 0;
+    col.forEach(function(i){ i.x = x; });        /* все по вертикали выбранного */
+  }
+  if(mode === "spread"){
+    col.sort(function(a, b){ return (a.y || 0) - (b.y || 0); });
+    if(col.length < 2) return;
+    var top = col[0].y || 0, bottom = col[col.length - 1].y || 0;
+    var stepY = (bottom - top) / (col.length - 1);
+    col.forEach(function(i, k){ i.y = +(top + stepY * k).toFixed(2); });
+  }
+  touch(); drawDesk(); drawIconList(); drawSel();
+  say("Колонка выровнена", "ok");
 }
 
 function drawSel(){
@@ -579,10 +609,38 @@ function drawSel(){
   }
 
   var pos = document.createElement("div");
-  pos.className = "hint";
-  pos.style.marginTop = "10px";
-  pos.textContent = "Положение: " + (it.x || 0) + "% по горизонтали, " + (it.y || 0) + "% по вертикали";
+  pos.innerHTML =
+    '<label style="margin-top:14px">Точное положение, % от экрана</label>' +
+    '<div class="grid2">' +
+      '<div><input type="number" step="0.5" min="0" max="97" data-p="x"></div>' +
+      '<div><input type="number" step="0.5" min="0" max="97" data-p="y"></div>' +
+    '</div>' +
+    '<div class="hint" style="margin-top:6px">Слева — отступ от левого края, справа — сверху. ' +
+      'При перетаскивании значок прилипает к сетке; зажмите Alt, чтобы двигать свободно.</div>';
+  pos.querySelectorAll("input").forEach(function(inp){
+    inp.value = it[inp.dataset.p] || 0;
+    inp.addEventListener("input", function(){
+      var v = parseFloat(inp.value);
+      if(isNaN(v)) return;
+      it[inp.dataset.p] = Math.max(0, Math.min(97, v));
+      touch(); drawDesk();
+    });
+  });
   body.appendChild(pos);
+
+  var tools = document.createElement("div");
+  tools.className = "add";
+  tools.style.marginTop = "10px";
+  [["Под логотип ANRI", "logo"],
+   ["Выровнять колонку слева", "left"],
+   ["Выровнять колонку справа", "right"],
+   ["Ровные отступы по высоте", "spread"]].forEach(function(t){
+    var bt = document.createElement("button");
+    bt.textContent = t[0];
+    bt.addEventListener("click", function(){ alignColumn(it, t[1]); });
+    tools.appendChild(bt);
+  });
+  body.appendChild(tools);
 
   function add(title, type, val, on){
     var w = document.createElement("div");

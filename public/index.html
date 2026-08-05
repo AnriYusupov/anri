@@ -1475,9 +1475,18 @@ addEventListener("load",function(){
      Cloudflare отдаёт его кусками, поэтому показ идёт с первых пришедших кадров. */
   var vid = document.getElementById("ayLoadV");
   if(vid){
-    vid.addEventListener("loadeddata", function(){
-      var p = vid.play(); if(p && p.catch) p.catch(function(){});
+    var kick = function(){ var p = vid.play(); if(p && p.catch) p.catch(function(){}); };
+    vid.addEventListener("loadeddata", kick);
+    /* ролик 4K тяжёлый: если данных не хватило и картинка встала — подталкиваем */
+    ["stalled","waiting","suspend","pause"].forEach(function(ev){
+      vid.addEventListener(ev, function(){ setTimeout(kick, 250); });
     });
+    var lastT = -1, still = 0;
+    var watch = setInterval(function(){
+      if(!document.getElementById("ayLoad")){ clearInterval(watch); return; }
+      if(vid.currentTime === lastT){ still++; if(still >= 3){ still = 0; kick(); } }
+      else { still = 0; lastT = vid.currentTime; }
+    }, 700);
   }
 
   /* шрифт заголовков — чтобы первый экран не мигнул подменой */
@@ -1512,8 +1521,7 @@ addEventListener("load",function(){
       step("first");
       elFill.style.width = "100%";
       elNum.textContent = "100%";
-      warmMedia();          /* пока человек смотрит заставку — тянем медиа кейсов */
-      ready();
+      ready();              /* прогрев запустим после входа, чтобы не душить ролик */
     })
     .catch(function(e){
       console.error("Сайт не запустился:", e);
@@ -1595,6 +1603,7 @@ addEventListener("load",function(){
     if(entered) return;
     entered = true;
     if(window.startSiteAudio) startSiteAudio();      /* музыка со звуком */
+    setTimeout(warmMedia, 900);   /* канал освободился — тянем медиа кейсов в фоне */
     elLoad.classList.add("gone");
     setTimeout(function(){
       if(elLoad.parentNode) elLoad.remove();
