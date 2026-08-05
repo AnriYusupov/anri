@@ -63,6 +63,8 @@ input[type=range]{width:100%}
 .di{position:absolute;width:104px;margin-left:-52px;margin-top:-38px;text-align:center;cursor:grab;
   padding:6px 4px;border-radius:9px;transform:translateZ(0)}
 .di.sel{background:rgba(255,255,255,.14);outline:1px solid rgba(255,255,255,.45)}
+.di.nofile img{outline:2px solid var(--warn);border-radius:8px}
+.di.nofile span::after{content:" !";color:var(--warn);font-weight:700}
 .di:active{cursor:grabbing}
 .di img{display:block;margin:0 auto;object-fit:cover;border-radius:7px;pointer-events:none;
   box-shadow:0 6px 16px -6px rgba(0,0,0,.8)}
@@ -417,7 +419,8 @@ function drawDesk(){
 
   DATA.desk.icons.forEach(function(it, i){
     var d = document.createElement("div");
-    d.className = "di" + (i === sel ? " sel" : "");
+    d.className = "di" + (i === sel ? " sel" : "") +
+      (it.type === "track" && !it.src ? " nofile" : "");
     d.style.left = (it.x || 0) + "%";
     d.style.top  = (it.y || 0) + "%";
     var im = document.createElement("img");
@@ -480,8 +483,10 @@ function drawIconList(){
     d.className = "item" + (i === sel ? " sel" : "");
     d.innerHTML = '<img src="' + iconImage(it) + '"><span class="nm"></span>' +
                   '<button title="Удалить">✕</button>';
-    d.querySelector(".nm").textContent =
-      (it.type === "folder" ? "📁 " : it.type === "track" ? "♪ " : "") + iconLabel(it);
+    var mark = (it.type === "folder" ? "📁 " : it.type === "track" ? "♪ " : "");
+    var warn = (it.type === "track" && !it.src) ? "  — файл не выбран" : "";
+    d.querySelector(".nm").textContent = mark + iconLabel(it) + warn;
+    if(warn) d.querySelector(".nm").style.color = "var(--warn)";
     d.addEventListener("click", function(e){
       if(e.target.tagName === "BUTTON") return;
       sel = i; drawDesk(); drawIconList(); drawSel();
@@ -506,8 +511,17 @@ function drawSel(){
   add("Подпись", "text", it.label || "", function(v){ it.label = v; touch(); drawDesk(); drawIconList(); });
 
   if(it.type === "track"){
+    if(!it.src){
+      var wr = document.createElement("div");
+      wr.style.cssText = "margin:10px 0;padding:9px 11px;border-radius:8px;" +
+        "background:rgba(224,176,78,.14);border:1px solid rgba(224,176,78,.5);" +
+        "color:var(--warn);font-size:12.5px;line-height:1.45";
+      wr.textContent = "Файл не выбран — на сайте этот значок не будет включать музыку. " +
+                       "Нажмите «Выбрать» и загрузите mp3.";
+      body.appendChild(wr);
+    }
     body.appendChild(mediaField("Файл трека (mp3)", it.src || "", function(v){
-      it.src = v; touch();
+      it.src = v; touch(); drawDesk(); drawIconList(); drawSel();
     }, "audio"));
     body.appendChild(mediaField("Своя обложка (необязательно)", it.cover || "", function(v){
       it.cover = v; touch(); drawDesk(); drawIconList();
