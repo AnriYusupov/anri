@@ -43,12 +43,20 @@
 #ayLoadBar{margin-top:16px;width:170px;height:1px;background:rgba(255,255,255,.30)}
 #ayLoadFill{height:100%;width:0;background:#fff;transition:width .35s ease}
 #ayLoadN{margin-top:9px;font:600 8px/1 ui-monospace,Menlo,monospace;letter-spacing:.34em}
-#ayEnter{margin-top:20px;padding:9px 22px;border:1px solid rgba(255,255,255,.5);
-  border-radius:22px;background:transparent;color:#fff;cursor:pointer;
-  font:600 9px/1 ui-monospace,Menlo,monospace;letter-spacing:.34em;text-transform:uppercase;
-  opacity:0;pointer-events:none;transition:opacity .3s ease}
+/* ENTER встаёт ровно на место слова LOADING, тем же набором */
+#ayEnter{position:absolute;margin:0;background:transparent;color:#fff;cursor:pointer;
+  font-family:'Anton',"Helvetica Neue",Helvetica,Arial,sans-serif;
+  font-size:24px;letter-spacing:.42em;line-height:1;text-transform:uppercase;
+  padding:16px 30px 16px calc(30px + .42em);      /* сдвиг под разрядку, чтобы текст стоял по центру */
+  border:1px solid currentColor;border-radius:999px;
+  opacity:0;pointer-events:none;transition:opacity .45s ease,background .2s ease}
 #ayEnter.on{opacity:1;pointer-events:auto}
-#ayEnter:hover{background:rgba(255,255,255,.14)}
+#ayEnter:hover{background:rgba(255,255,255,.12)}
+/* пока грузится — виден отсчёт, после — только ENTER */
+#ayLoadT,#ayLoadBar,#ayLoadN{transition:opacity .35s ease}
+#ayLoadC.done #ayLoadT,
+#ayLoadC.done #ayLoadBar,
+#ayLoadC.done #ayLoadN{opacity:0}
 
 @font-face{
   font-family:'Anton';
@@ -1373,28 +1381,26 @@ addEventListener("load",function(){
     setTimeout(paint, 400);
   };
 
-  /* смена трека — с плавным затуханием, без резкого обрыва */
+  /* Смена трека: гасим текущий, подставляем новый, поднимаем обратно.
+     Никаких возвратов позиции — новый трек всегда играет с начала. */
   window.setSiteTrack = function(src, name){
-    if(!src || audio.getAttribute("src") === src) return;
-    if(window.__audioAllowReset) window.__audioAllowReset(true);   /* смену трека разрешаем */
-    var vol = audio.volume, t0 = performance.now();
-    (function down(){
-      var k = Math.min(1, (performance.now() - t0) / 260);
-      audio.volume = vol * (1 - k);
-      if(k < 1) return requestAnimationFrame(down);
-      audio.src = src;
-      audio.currentTime = 0;
-      play();
+    if(!src) return;
+    var same = audio.getAttribute("src") === src;
+    if(same && !audio.paused) return;          /* уже играет именно он */
+
+    var target = audio.muted ? 0 : 1;
+    fadeTo(0, 240, function(){
+      if(!same){
+        audio.src = src;
+        audio.load();                          /* даём браузеру подхватить новый файл */
+      }
+      try{ audio.currentTime = 0; }catch(e){}
       window.currentTrackName = name || "";
-      if(window.__audioAllowReset) setTimeout(function(){ window.__audioAllowReset(false); }, 800);
-      var t1 = performance.now();
-      (function up(){
-        var k2 = Math.min(1, (performance.now() - t1) / 320);
-        audio.volume = vol * k2;
-        if(k2 < 1) requestAnimationFrame(up);
-      })();
+      var pr = audio.play();
+      if(pr && pr.catch) pr.catch(function(){});
+      fadeTo(target, 420);
       paint();
-    })();
+    });
   };
 
   if(btn){
@@ -1412,20 +1418,6 @@ addEventListener("load",function(){
       paint();
     });
   }
-  /* Страховка от самопроизвольного сброса: запоминаем позицию и,
-     если трек внезапно прыгнул в начало не по нашей команде — возвращаем обратно. */
-  var lastPos = 0, allowReset = true;
-  window.__audioAllowReset = function(v){ allowReset = v; };
-  audio.addEventListener("timeupdate", function(){
-    var t = audio.currentTime;
-    if(!allowReset && t < 1 && lastPos > 5){
-      try{ audio.currentTime = lastPos; }catch(e){}
-      return;
-    }
-    if(t > 0.2) lastPos = t;
-  });
-  audio.addEventListener("playing", function(){ allowReset = false; });
-
   audio.addEventListener("play", paint);
   audio.addEventListener("pause", paint);
   paint();
@@ -1590,7 +1582,9 @@ addEventListener("load",function(){
   /* Кнопка нужна не для красоты: клик — это разрешение браузера на звук,
      без него музыка может стартовать только беззвучно. */
   function ready(){
-    elEnter.classList.add("on");
+    var box = document.getElementById("ayLoadC");
+    if(box) box.classList.add("done");        /* убираем LOADING, полосу и проценты */
+    setTimeout(function(){ elEnter.classList.add("on"); }, 260);
     elEnter.addEventListener("click", enter);
     document.addEventListener("keydown", function onKey(e){
       if(e.key === "Enter" || e.key === " "){ document.removeEventListener("keydown", onKey); enter(); }

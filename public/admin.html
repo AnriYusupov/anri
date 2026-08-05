@@ -594,7 +594,8 @@ $("#dockScale").addEventListener("input", function(){
 $("#addFolder").addEventListener("click", function(){
   var name = prompt("Название папки:", "Новая папка");
   if(!name) return;
-  DATA.desk.icons.push({ type:"folder", label:name, x:88, y:20, items:[] });
+  var fpos = freeSpot("folder");
+  DATA.desk.icons.push({ type:"folder", label:name, x:fpos.x, y:fpos.y, items:[] });
   sel = DATA.desk.icons.length - 1;
   touch(); drawDesk(); drawIconList(); drawSel();
 });
@@ -604,10 +605,17 @@ $("#addWork").addEventListener("click", function(){
   sel = DATA.desk.icons.length - 1;
   touch(); drawDesk(); drawIconList(); drawSel();
 });
+function freeSpot(kind){
+  /* ставим рядом с такими же, но со сдвигом — иначе значки лягут друг на друга */
+  var same = DATA.desk.icons.filter(function(i){ return i.type === kind; }).length;
+  return { x: 88, y: Math.min(88, (kind === "track" ? 40 : 12) + same * 11) };
+}
+
 $("#addTrack").addEventListener("click", function(){
   var name = prompt("Название трека:", "Новый трек");
   if(!name) return;
-  DATA.desk.icons.push({ type:"track", label:name, x:88, y:40, src:"", startup:false });
+  var pos = freeSpot("track");
+  DATA.desk.icons.push({ type:"track", label:name, x:pos.x, y:pos.y, src:"", startup:false });
   sel = DATA.desk.icons.length - 1;
   touch(); drawDesk(); drawIconList(); drawSel();
 });
