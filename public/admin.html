@@ -943,6 +943,8 @@ function blockEditor(p, b, i){
   }
   else if(b.type === "video"){
     w.appendChild(mediaField("Видеофайл", b.src || "", function(v){ b.src = v; touch(); }, "video"));
+    w.appendChild(mediaField("Обложка — какой кадр показывать до запуска",
+      b.poster || "", function(v){ b.poster = v; touch(); }, "image"));
     textField("Подпись", "caption");
   }
   else if(b.type === "twoImages"){

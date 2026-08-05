@@ -1520,6 +1520,7 @@ addEventListener("load",function(){
       step("first");
       elFill.style.width = "100%";
       elNum.textContent = "100%";
+      warmMedia();          /* пока человек смотрит заставку — тянем медиа кейсов */
       ready();
     })
     .catch(function(e){
@@ -1527,6 +1528,64 @@ addEventListener("load",function(){
       elNum.textContent = "ошибка загрузки";
       ready();
     });
+
+
+  /* ---- прогрев медиа ----
+     Пока идёт заставка, в фоне подтягиваем картинки и начала видео из кейсов.
+     Тогда человек открывает работу — и она уже готова, без ожидания и крутилки. */
+  function collectMedia(){
+    var out = [];
+    try{
+      var el = document.getElementById("SITE_DATA");
+      var d = el ? JSON.parse(el.textContent) : {};
+      (d.projects || []).forEach(function(p){
+        if(p.cover)      out.push({u:p.cover, v:false});
+        if(p.coverVideo) out.push({u:p.coverVideo, v:true});
+        (p.blocks || []).forEach(function(b){
+          if(b.poster) out.push({u:b.poster, v:false});
+          if(b.type === "image" && b.src) out.push({u:b.src, v:false});
+          if(b.type === "video" && b.src) out.push({u:b.src, v:true});
+          if(b.type === "twoImages"){ if(b.a) out.push({u:b.a,v:false}); if(b.b) out.push({u:b.b,v:false}); }
+          if(b.type === "gallery") (b.items || []).forEach(function(s){ out.push({u:s, v:false}); });
+        });
+      });
+      var dl = document.getElementById("DESK_LAYOUT");
+      var k = dl ? JSON.parse(dl.textContent) : {};
+      (k.icons || []).forEach(function(i){
+        (i.items || []).forEach(function(f){
+          if(f.src) out.push({u:f.src, v:(f.kind === "video")});
+        });
+      });
+    }catch(e){}
+    var seen = {}, uniq = [];
+    out.forEach(function(x){ if(x.u && !seen[x.u]){ seen[x.u] = 1; uniq.push(x); } });
+    return uniq;
+  }
+
+  function warmMedia(){
+    var list = collectMedia();
+    if(!list.length) return;
+    var i = 0, busy = 0, MAX = 3;      /* по три за раз, чтобы не мешать друг другу */
+
+    function next(){
+      if(i >= list.length || busy >= MAX) return;
+      var item = list[i++]; busy++;
+      var done = function(){ busy--; next(); };
+
+      if(item.v){
+        /* у видео тянем начало файла: браузеру хватит, чтобы начать показ сразу */
+        fetch(item.u, { headers: { Range: "bytes=0-2000000" } })
+          .then(function(r){ return r.arrayBuffer(); })
+          .then(done, done);
+      } else {
+        var im = new Image();
+        im.onload = done; im.onerror = done;
+        im.src = item.u;
+      }
+      next();
+    }
+    for(var k = 0; k < MAX; k++) next();
+  }
 
   /* Кнопка нужна не для красоты: клик — это разрешение браузера на звук,
      без него музыка может стартовать только беззвучно. */

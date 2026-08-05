@@ -800,6 +800,7 @@ function openLB(p, srcMedia){
     m = document.createElement("video");
     m.muted = true; m.loop = true; m.autoplay = true; m.playsInline = true;
     m.setAttribute("playsinline","");
+    if(srcMedia.poster) m.poster = srcMedia.poster;
     m.src = srcMedia.src;
     m.id = "lbMedia";
   } else {
