@@ -258,28 +258,6 @@ body.gl #scene.gridmode .frame > img,body.gl #scene.gridmode .frame > video{opac
   transition:opacity .3s}
 
 /* фон кейса рисуется дизерингом на канвасе — как на типографической стене */
-/* Фон: несколько крупных размытых пятен, которые очень медленно плывут
-   и наплывают друг на друга. Даёт мягкое свечение, не отвлекая от работ. */
-#cvAur{position:fixed;inset:0;pointer-events:none;z-index:0;overflow:hidden;filter:blur(70px)}
-#cvAur i{position:absolute;display:block;border-radius:50%;opacity:.42;will-change:transform}
-#cvAur i:nth-child(1){width:52vw;height:52vw;left:-8vw;top:-10vw;
-  background:radial-gradient(circle at 50% 50%, #2b3f7a, transparent 68%);
-  animation:aurA 92s ease-in-out infinite alternate}
-#cvAur i:nth-child(2){width:46vw;height:46vw;right:-6vw;top:6vh;
-  background:radial-gradient(circle at 50% 50%, #6a3f6e, transparent 68%);
-  animation:aurB 118s ease-in-out infinite alternate}
-#cvAur i:nth-child(3){width:58vw;height:58vw;left:18vw;bottom:-24vw;
-  background:radial-gradient(circle at 50% 50%, #7a4a52, transparent 70%);
-  animation:aurC 140s ease-in-out infinite alternate}
-#cvAur i:nth-child(4){width:38vw;height:38vw;right:14vw;bottom:8vh;
-  background:radial-gradient(circle at 50% 50%, #24506b, transparent 70%);
-  animation:aurD 104s ease-in-out infinite alternate}
-@keyframes aurA{0%{transform:translate3d(0,0,0) scale(1)}100%{transform:translate3d(9vw,7vh,0) scale(1.16)}}
-@keyframes aurB{0%{transform:translate3d(0,0,0) scale(1.1)}100%{transform:translate3d(-8vw,10vh,0) scale(.92)}}
-@keyframes aurC{0%{transform:translate3d(0,0,0) scale(1)}100%{transform:translate3d(-11vw,-8vh,0) scale(1.2)}}
-@keyframes aurD{0%{transform:translate3d(0,0,0) scale(1.05)}100%{transform:translate3d(7vw,-9vh,0) scale(.9)}}
-@media (prefers-reduced-motion: reduce){ #cvAur i{animation:none} }
-
 #caseView .cvinner,#caseView .cvbar{position:relative;z-index:1}
 #caseView.on{opacity:1;visibility:visible}
 
@@ -296,7 +274,6 @@ body.gl #scene.gridmode .frame > img,body.gl #scene.gridmode .frame > video{opac
 @media (prefers-reduced-motion: reduce){
   #caseView .cb,#caseView .cb-grid img,#caseView .cb-grid video{
     opacity:1;transform:none;transition:none}
-  #cvAur i{animation:none}
 }
 
 .cvbar{position:sticky;top:0;z-index:3;display:flex;align-items:center;gap:20px;padding:16px 26px;
@@ -476,7 +453,6 @@ body.gl #scene.gridmode .frame > img,body.gl #scene.gridmode .frame > video{opac
 
 <!-- case page -->
 <div id="caseView" role="dialog" aria-modal="true">
-  <div id="cvAur" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
   <div class="cvbar">
     <button class="cvclose" data-caseclose>← НАЗАД</button>
     <div class="cvname"></div>
