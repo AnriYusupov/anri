@@ -1,9 +1,13 @@
-# кэш: медиа и код с хэшем в имени можно держать вечно, данные — нет
+# медиа не меняется — можно кэшировать надолго
 /media/*
   Cache-Control: public, max-age=31536000, immutable
+
+# код и данные должны обновляться сразу, иначе правки не доходят до людей
 /js/*
-  Cache-Control: public, max-age=604800
+  Cache-Control: no-cache
 /data/*
   Cache-Control: no-cache
 /index.html
+  Cache-Control: no-cache
+/admin.html
   Cache-Control: no-cache

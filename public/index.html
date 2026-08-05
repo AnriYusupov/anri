@@ -35,8 +35,11 @@
 #ayLoad{position:fixed;inset:0;z-index:9999;background:#000;overflow:hidden;
   opacity:1;transition:opacity .5s ease}
 #ayLoad.gone{opacity:0;pointer-events:none}
-#ayLoadV{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;
-  background:#000 center/cover no-repeat}
+#ayLoadV{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+/* заглушка держит кадр, пока не пошло само видео; размытие прячет сжатие */
+#ayLoadP{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;
+  filter:blur(14px);transform:scale(1.06);opacity:1;transition:opacity .45s ease}
+#ayLoadP.gone{opacity:0}
 #ayLoadC{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;
   justify-content:center;mix-blend-mode:difference;color:#fff}
 #ayLoadT{font-family:'Anton',"Helvetica Neue",Helvetica,Arial,sans-serif;font-size:24px;
@@ -327,8 +330,9 @@ body.gl #scene.gridmode .frame > img,body.gl #scene.gridmode .frame > video{opac
 <body>
 <audio id="deskAudio" loop preload="auto"></audio>
 <div id="ayLoad">
+  <img id="ayLoadP" src="media/loader_poster.jpg" alt="">
   <video id="ayLoadV" autoplay muted loop playsinline preload="auto"
-         poster="media/loader_poster.jpg" data-src="media/loader.mp4"></video>
+         data-src="media/loader.mp4"></video>
   <div id="ayLoadC">
     <div id="ayLoadT">LOADING</div>
     <div id="ayLoadBar"><div id="ayLoadFill"></div></div>
@@ -1334,6 +1338,21 @@ addEventListener("load",function(){
     if(p && p.catch) p.catch(function(){});
   }
 
+  /* Плавное изменение громкости — музыка не должна бить в лоб.
+     Идём по таймеру, а не по кадрам: на тяжёлой сцене кадры проседают,
+     и нарастание перескочило бы рывком. */
+  var fadeTimer = null;
+  function fadeTo(target, ms, done){
+    if(fadeTimer) clearInterval(fadeTimer);
+    var from = audio.volume, t0 = Date.now();
+    fadeTimer = setInterval(function(){
+      var k = Math.min(1, (Date.now() - t0) / ms);
+      var e = k < .5 ? 2*k*k : 1 - Math.pow(-2*k + 2, 2) / 2;
+      audio.volume = Math.max(0, Math.min(1, from + (target - from) * e));
+      if(k >= 1){ clearInterval(fadeTimer); fadeTimer = null; if(done) done(); }
+    }, 25);
+  }
+
   /* вызывается с заставки — клик по «Enter» и есть разрешение на звук */
   window.startSiteAudio = function(){
     /* если в админке отмечен стартовый трек — играем его */
@@ -1352,13 +1371,17 @@ addEventListener("load",function(){
     }catch(e){}
     audio.muted = !wantSound;
     try{ audio.currentTime = 0; }catch(e){}
-    play(); paint();
+    audio.volume = 0;              /* входим тихо и плавно набираем за 3 секунды */
+    play();
+    fadeTo(1, 3000);
+    paint();
     setTimeout(paint, 400);
   };
 
   /* смена трека — с плавным затуханием, без резкого обрыва */
   window.setSiteTrack = function(src, name){
     if(!src || audio.getAttribute("src") === src) return;
+    if(window.__audioAllowReset) window.__audioAllowReset(true);   /* смену трека разрешаем */
     var vol = audio.volume, t0 = performance.now();
     (function down(){
       var k = Math.min(1, (performance.now() - t0) / 260);
@@ -1368,6 +1391,7 @@ addEventListener("load",function(){
       audio.currentTime = 0;
       play();
       window.currentTrackName = name || "";
+      if(window.__audioAllowReset) setTimeout(function(){ window.__audioAllowReset(false); }, 800);
       var t1 = performance.now();
       (function up(){
         var k2 = Math.min(1, (performance.now() - t1) / 320);
@@ -1382,11 +1406,31 @@ addEventListener("load",function(){
     btn.addEventListener("click", function(e){
       e.stopPropagation();
       wantSound = audio.muted || audio.paused;
-      if(wantSound){ audio.muted = false; play(); }
-      else { audio.muted = true; }
+      if(wantSound){
+        audio.muted = false;
+        audio.volume = 0;
+        play();
+        fadeTo(1, 900);
+      } else {
+        fadeTo(0, 600, function(){ audio.muted = true; audio.volume = 1; paint(); });
+      }
       paint();
     });
   }
+  /* Страховка от самопроизвольного сброса: запоминаем позицию и,
+     если трек внезапно прыгнул в начало не по нашей команде — возвращаем обратно. */
+  var lastPos = 0, allowReset = true;
+  window.__audioAllowReset = function(v){ allowReset = v; };
+  audio.addEventListener("timeupdate", function(){
+    var t = audio.currentTime;
+    if(!allowReset && t < 1 && lastPos > 5){
+      try{ audio.currentTime = lastPos; }catch(e){}
+      return;
+    }
+    if(t > 0.2) lastPos = t;
+  });
+  audio.addEventListener("playing", function(){ allowReset = false; });
+
   audio.addEventListener("play", paint);
   audio.addEventListener("pause", paint);
   paint();
@@ -1446,13 +1490,17 @@ addEventListener("load",function(){
     vid.src = vid.dataset.src;          /* ролик подключаем отдельно от кода сайта */
     var p = vid.play(); if(p && p.catch) p.catch(function(){});
   }
+  var poster = document.getElementById("ayLoadP");
   if(vid){
+    vid.addEventListener("playing", function(){
+      if(poster) poster.classList.add("gone");   /* видео пошло — заглушка не нужна */
+    });
     vid.addEventListener("loadeddata", function(){
       var p = vid.play(); if(p && p.catch) p.catch(function(){});
     });
     vid.addEventListener("error", function(){
-      /* ролик не пошёл — остаётся кадр-заглушка, заставка не ломается */
-      vid.style.background = "#000 url(media/loader_poster.jpg) center/cover no-repeat";
+      /* ролик не пошёл — остаётся заглушка, заставка не ломается */
+      if(poster) poster.classList.remove("gone");
     });
   }
 
@@ -1475,8 +1523,8 @@ addEventListener("load",function(){
       return Promise.all([ getJSON("data/site.json"), getJSON("data/desk.json") ])
         .then(function(d){ inject("SITE_DATA", d[0]); inject("DESK_LAYOUT", d[1]); });
     })
-    .then(function(){ step("data"); startClip(); return load("js/three.min.js"); })
-    .then(function(){ step("three"); return load("js/main.js"); })
+    .then(function(){ step("data"); startClip(); return load("js/three.min.js?v=4"); })
+    .then(function(){ step("three"); return load("js/main.js?v=4"); })
     .then(function(){
       step("main");
       /* ждём первый настоящий кадр, иначе заставка уйдёт в пустоту */

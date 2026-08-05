@@ -261,7 +261,8 @@ input[type=range]{width:100%}
   <div class="win">
     <div class="head">
       <h2>Выберите файл</h2>
-      <label class="btn" style="margin:0">Загрузить<input type="file" id="upFile" hidden></label>
+      <button class="btn main" id="upBtn" type="button">Загрузить с компьютера</button>
+      <input type="file" id="upFile" style="display:none">
       <button class="btn" id="mClose">Закрыть</button>
     </div>
     <div class="hint" id="upHint" style="margin-bottom:6px"></div>
@@ -339,9 +340,9 @@ function start(){
     canUpload = !!res[1].canUpload;
     MEDIA = res[2] || [];
     $("#upHint").textContent = canUpload
-      ? "Можно загрузить новый файл — он попадёт в хранилище и сразу станет доступен."
+      ? "Нажмите «Загрузить с компьютера» или просто перетащите файл в это окно."
       : "Загрузка файлов выключена: не подключено хранилище R2. Пока доступны файлы, уже лежащие на сайте.";
-    if(!canUpload) $("#upFile").disabled = true;
+    if(!canUpload){ $("#upFile").disabled = true; $("#upBtn").disabled = true; }
     renderAll();
     say("Загружено", "ok");
   }).catch(function(e){ say(e.message, "err"); });
@@ -1101,11 +1102,45 @@ function closeMedia(){ $("#modal").classList.remove("on"); pickTarget = null; }
 $("#mClose").addEventListener("click", closeMedia);
 $("#modal").addEventListener("click", function(e){ if(e.target.id === "modal") closeMedia(); });
 
+$("#upBtn").addEventListener("click", function(){
+  var inp = $("#upFile");
+  if(inp.disabled){
+    $("#upStat").style.color = "var(--accent)";
+    $("#upStat").textContent = "Загрузка недоступна: хранилище не подключено.";
+    return;
+  }
+  inp.click();                       /* открываем выбор файла */
+});
+
+/* файл можно просто перетащить в окно */
+(function(){
+  var win = document.querySelector("#modal .win");
+  if(!win) return;
+  ["dragenter","dragover"].forEach(function(ev){
+    win.addEventListener(ev, function(e){
+      e.preventDefault(); e.stopPropagation();
+      win.style.outline = "2px dashed var(--accent)";
+    });
+  });
+  ["dragleave","drop"].forEach(function(ev){
+    win.addEventListener(ev, function(e){
+      e.preventDefault(); e.stopPropagation();
+      win.style.outline = "";
+    });
+  });
+  win.addEventListener("drop", function(e){
+    var f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if(f) handleUpload(f);
+  });
+})();
+
 $("#upFile").addEventListener("change", function(){
   var f = this.files && this.files[0];
   this.value = "";
-  if(!f) return;
+  if(f) handleUpload(f);
+});
 
+function handleUpload(f){
   var stat = $("#upStat");
   var mb = (f.size / 1048576).toFixed(1);
   var isVideo = f.type.indexOf("video") === 0;
@@ -1147,7 +1182,7 @@ $("#upFile").addEventListener("change", function(){
       stat.textContent = "Не загрузилось: " + e.message;
       say(e.message, "err");
     });
-});
+}
 
 /* ============================================================
    ТЕКСТЫ
