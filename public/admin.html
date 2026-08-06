@@ -1341,10 +1341,11 @@ function blockEditor(p, b, i){
         '<div><label>' + (isStats ? "Цифра" : "Роль") + '</label><input type="text" data-k="' +
           (isStats ? "value" : "role") + '"></div>' +
         '<div style="display:flex;gap:7px;align-items:flex-end">' +
-          '<div style="flex:1"><label>' + (isStats ? "Подпись" : "Имя") + '</label>' +
-          '<input type="text" data-k="' + (isStats ? "label" : "name") + '"></div>' +
+          '<div style="flex:1"><label>' + (isStats ? "Подпись" : "Имя (можно несколько, каждое с новой строки)") + '</label>' +
+          (isStats ? '<input type="text" data-k="label">'
+                   : '<textarea data-k="name" style="min-height:52px"></textarea>') + '</div>' +
           '<button class="btn">✕</button></div>';
-      r.querySelectorAll("input").forEach(function(inp){
+      r.querySelectorAll("input,textarea").forEach(function(inp){
         inp.value = it[inp.dataset.k] || "";
         inp.addEventListener("input", function(){ it[inp.dataset.k] = inp.value; touch(); });
       });

@@ -812,7 +812,17 @@ function renderBlocks(blocks, host){
       w.appendChild(sg); }
     else if(b.type==="credits"){ w.className="cb";
       var cg=el("div","cb-cred");
-      (b.items||[]).forEach(function(s){ var d=el("div"); d.appendChild(el("span",null,s.role||"")); d.appendChild(el("b",null,s.name||"")); cg.appendChild(d); });
+      (b.items||[]).forEach(function(s){
+        var row=el("div","crow");
+        row.appendChild(el("div","crole", s.role||""));
+        var val=el("div","cname");
+        /* в одной строке может быть несколько имён — каждое с новой строки */
+        String(s.name||"").split(/\n+/).forEach(function(line){
+          if(line.trim()) val.appendChild(el("span",null,line.trim()));
+        });
+        row.appendChild(val);
+        cg.appendChild(row);
+      });
       w.appendChild(cg); }
     else if(b.type==="cta"){ w.className="cb cb-cta";
       var a=el("a",null,b.label||"Открыть"); a.href=b.href||"#"; a.target="_blank"; a.rel="noopener"; w.appendChild(a); }
