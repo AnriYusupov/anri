@@ -1174,7 +1174,7 @@ function drawProjEdit(){
   addBar.className = "add";
   [["heading","Заголовок"],["text","Текст"],["quote","Цитата"],["image","Картинка"],
    ["twoImages","Две рядом"],["gallery","Галерея"],["video","Видео"],["embed","Ролик по ссылке"],
-   ["twoCols","Две колонки"],["stats","Цифры"],["credits","Команда"],["cta","Кнопка"],
+   ["twoCols","Две колонки"],["stats","Цифры"],["credits","Титры"],["cta","Кнопка"],
    ["embedCode","Свой код"],["model3d","3D-модель"],["spacer","Отступ"],["divider","Линия"]]
     .forEach(function(t){
       var b = document.createElement("button");
@@ -1194,7 +1194,7 @@ function drawProjEdit(){
 
 var BLOCK_NAME = { heading:"Заголовок", text:"Текст", quote:"Цитата", image:"Картинка",
   twoImages:"Две картинки", gallery:"Галерея", video:"Видео", embed:"Ролик по ссылке",
-  twoCols:"Две колонки текста", stats:"Цифры", credits:"Команда", cta:"Кнопка-ссылка",
+  twoCols:"Две колонки текста", stats:"Цифры", credits:"Титры проекта", cta:"Кнопка-ссылка",
   embedCode:"Свой код", model3d:"3D-модель", spacer:"Отступ", divider:"Линия" };
 
 function blockEditor(p, b, i){
@@ -1338,10 +1338,10 @@ function blockEditor(p, b, i){
       r.className = "grid2";
       r.style.marginBottom = "8px";
       r.innerHTML =
-        '<div><label>' + (isStats ? "Цифра" : "Роль") + '</label><input type="text" data-k="' +
-          (isStats ? "value" : "role") + '"></div>' +
+        '<div><label>' + (isStats ? "Цифра" : "Название строки — Client, Studio, Role…") +
+          '</label><input type="text" data-k="' + (isStats ? "value" : "role") + '"></div>' +
         '<div style="display:flex;gap:7px;align-items:flex-end">' +
-          '<div style="flex:1"><label>' + (isStats ? "Подпись" : "Имя (можно несколько, каждое с новой строки)") + '</label>' +
+          '<div style="flex:1"><label>' + (isStats ? "Подпись" : "Значение (несколько — каждое с новой строки)") + '</label>' +
           (isStats ? '<input type="text" data-k="label">'
                    : '<textarea data-k="name" style="min-height:52px"></textarea>') + '</div>' +
           '<button class="btn">✕</button></div>';
@@ -1356,7 +1356,7 @@ function blockEditor(p, b, i){
     });
     var ab2 = document.createElement("button");
     ab2.className = "btn";
-    ab2.textContent = isStats ? "+ Цифра" : "+ Человек";
+    ab2.textContent = isStats ? "+ Цифра" : "+ Строка";
     ab2.addEventListener("click", function(){
       b.items.push(isStats ? { value:"", label:"" } : { role:"", name:"" });
       touch(); drawProjEdit();

@@ -11,3 +11,12 @@
   Cache-Control: no-cache
 /admin.html
   Cache-Control: no-cache
+
+# Библиотека 3D и данные фигуры не меняются от правки к правке, а весят много.
+# Пусть лежат в кэше браузера: при замене к адресу дописывается новая версия
+# (?v=N в index.html), и старый файл перестаёт использоваться.
+# Правила ниже перекрывают общие, что заданы выше.
+/js/three.min.js
+  Cache-Control: public, max-age=31536000, immutable
+/data/scene.bin
+  Cache-Control: public, max-age=31536000, immutable
