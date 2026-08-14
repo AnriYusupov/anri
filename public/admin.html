@@ -1162,7 +1162,7 @@ function drawProjEdit(){
   ].forEach(function(f){
     cov.appendChild(mediaField(f[1], p[f[0]] || "", function(v){
       p[f[0]] = v; touch(); drawDesk(); drawProjects(); paintPreview();
-    }, f[2], f[3]));
+    }, f[2], f[3], true));   /* значок и превью — те места, где вес критичен */
   });
 
   /* блоки */
@@ -1378,7 +1378,7 @@ function blockEditor(p, b, i){
 }
 
 /* поле «файл + кнопка выбора» */
-function mediaField(label, value, on, want, hint){
+function mediaField(label, value, on, want, hint, light){
   var d = document.createElement("div");
   d.innerHTML = '<label>' + label + '</label><div class="pick">' +
     '<img class="thumb"><input type="text" placeholder="media/… или ссылка">' +
@@ -1402,14 +1402,17 @@ function mediaField(label, value, on, want, hint){
       if(!n) return;
       var mb = n / 1048576;
       var isVid = want === "video" || /\.(mp4|mov|webm|m4v)(\?|$)/i.test(v);
-      var limit = isVid ? 15 : 1.5;
-      wt.textContent = (mb < 1 ? Math.round(n / 1024) + " КБ" : mb.toFixed(1) + " МБ") +
-        (mb > limit
-          ? " — тяжеловато. " + (isVid
-              ? "Для превью хватает 1080p и 5–8 секунд, это 2–4 МБ."
-              : "Картинку стоит пережать: обычно хватает 200–500 КБ.")
-          : " — нормально");
-      wt.style.color = mb > limit ? "var(--warn)" : "";
+      var size = (mb < 1 ? Math.round(n / 1024) + " КБ" : mb.toFixed(1) + " МБ");
+      /* Ругаемся только там, где вес правда важен: превью при наведении должно
+         открыться мгновенно, его не подгрузишь заранее, если оно огромное.
+         Видео внутри кейса пусть будет каким угодно — оно стримится. */
+      var limit = light ? (isVid ? 8 : 1.5) : 0;
+      var heavy = limit && mb > limit;
+      wt.textContent = size + (!limit ? "" : heavy
+        ? " — для превью много. Оно должно открываться мгновенно, а такое не успеет: " +
+          (isVid ? "нужно 1080p, 5–8 секунд, 2–4 МБ." : "картинке хватает 200–500 КБ.")
+        : " — нормально");
+      wt.style.color = heavy ? "var(--warn)" : "";
     }).catch(function(){});
   }
 
@@ -1508,6 +1511,8 @@ $("#upFile").addEventListener("change", function(){
   if(f) handleUpload(f);
 });
 
+var heavyOK = null;   /* имя+размер файла, для которого вес уже подтвердили */
+
 function handleUpload(f){
   var stat = $("#upStat");
   var mb = (f.size / 1048576).toFixed(1);
@@ -1530,6 +1535,21 @@ function handleUpload(f){
     stat.textContent = "Файл " + mb + " МБ — больше предела в 100 МБ. Сожмите видео и попробуйте снова.";
     return;
   }
+
+  /* Тяжёлое видео — главная причина, по которой сайт кажется медленным.
+     Не запрещаем: полный ролик внутри кейса иногда и должен быть большим.
+     Но предупреждаем и просим подтвердить, чтобы это был осознанный выбор,
+     а не случайно залитый мастер. */
+  if(pickWant === "video" && isVideo && f.size > 15 * 1048576 && heavyOK !== f.name + f.size){
+    heavyOK = f.name + f.size;
+    stat.style.color = "var(--warn)";
+    stat.textContent = "Ролик весит " + mb + " МБ. Если это превью при наведении — " +
+      "много: его нельзя подгрузить заранее, зритель будет ждать. " +
+      "Для превью нормально 1080p, 5–8 секунд, 2–4 МБ. " +
+      "Если файл для страницы кейса — всё в порядке, выберите его ещё раз.";
+    return;
+  }
+  heavyOK = null;
 
   stat.style.color = "var(--dim)";
   stat.textContent = "Загружаю «" + f.name + "» (" + mb + " МБ)… для видео это может занять минуту.";
