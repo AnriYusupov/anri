@@ -40,6 +40,10 @@ var PROJECTS = (function(){
     out.push({
       id:id,
       index:i,
+      /* Значок на столе — отдельная картинка. Обложка в превью широкая, а значок
+         маленький квадрат, и это редко одно и то же. Если свой не задан —
+         берём обложку, как было раньше. */
+      icon: s.deskIcon || s.cover || DEFAULT_IMGS["p"+((i%7)+1)],
       video: !!(s.coverVideo || s.video),
       videoSrc: s.coverVideo || s.video || "",
       title: (s.title||"UNTITLED").toUpperCase(),
@@ -269,7 +273,10 @@ var FOLDER_SRC = "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org
       })(it);
     } else {
       var P = PROJECTS[(it.ref||0) % PROJECTS.length];
-      img.src = P.video ? IMGS["p1"] : IMGS[P.id];
+      /* Раньше здесь стояло: P.video ? IMGS["p1"] : IMGS[P.id] — и любой кейс
+         с видео в превью получал на стол картинку ПЕРВОГО кейса. Значок всегда
+         берём у своего проекта; своя картинка значка на этом месте — сильнее всего. */
+      img.src = it.cover || P.icon;
       img.alt = P.title;
       cap.textContent = it.label || P.title;
       (function(proj){

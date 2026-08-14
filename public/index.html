@@ -716,14 +716,14 @@ global.PaperFX = PaperFX;
 </script>
 
 
-<!-- данные сцены вынесены в data/scene.bin, three.js подключается по требованию -->
+<!-- данные сцены вынесены в data/scene.txt, библиотека 3D подключается скриптом ниже -->
 
 
 <script>
 /* Сцена рабочего стола. Раньше это была самозапускающаяся функция и она
    выполнялась при разборе страницы. Теперь её зовёт startFX ниже — после
    того как пришли библиотека и данные. */
-window.startFX = function(SCENE_BUF){
+window.startFX = function(SCENE_TEXT){
 "use strict";
 
 var CFG = {
@@ -770,6 +770,8 @@ var scene=new THREE.Scene();
 var camera=new THREE.PerspectiveCamera(CFG.fov, innerWidth/innerHeight, 0.1, 900);
 
 /* ---------- распаковка ---------- */
+function b64bytes(s){var b=atob(s),n=b.length,a=new Uint8Array(n);
+  for(var i=0;i<n;i++)a[i]=b.charCodeAt(i);return a;}
 function unpack(bytes){
   var dv=new DataView(bytes.buffer,bytes.byteOffset,bytes.byteLength);
   var hl=dv.getUint32(0,true);
@@ -783,7 +785,7 @@ function unpack(bytes){
   }
   return out;
 }
-var B=unpack(new Uint8Array(SCENE_BUF));
+var B=unpack(b64bytes(SCENE_TEXT));
 var mPos=B[0], mCol=B[1], mIdx=B[2], pPos=B[3], pCol=B[4], pSiz=B[5];
 
 /* ---------- тело: гладкая поверхность с запечённым светом ---------- */
@@ -1313,13 +1315,17 @@ syncProt();
 </script>
 
 <script>
-/* ---- сцена по требованию ----
-   Библиотека 3D и данные фигуры вместе весят почти мегабайт, а видны только на
-   экране рабочего стола. Раньше они лежали прямо в разметке и страница ждала их
-   ещё до первого кадра. Теперь тянем их в фоне — после входа или при первом
-   движении человека — и запускаем сцену, когда пришли. */
+/* ---- сцена отдельным файлом ----
+   Библиотека 3D и данные фигуры вместе весят около мегабайта. Раньше данные
+   лежали прямо в разметке, и браузер тянул их ещё до первого кадра — страница
+   весила 598 КБ вместо 90 КБ.
+
+   Но собирать сцену ПОСЛЕ входа тоже нельзя: почти мегабайт и тяжёлая сборка
+   приходятся ровно на тот момент, когда человек уже смотрит и крутит, и всё
+   заметно дёргается. Поэтому грузим их так же, как раньше — пока идёт заставка,
+   параллельно со всем остальным. К кнопке ENTER сцена уже собрана. */
 (function(){
-  var going = null;
+  var going = null, started = false;
 
   function script(src){
     return new Promise(function(res, rej){
@@ -1335,26 +1341,25 @@ syncProt();
     if(going) return going;
     going = Promise.all([
       script("js/three.min.js?v=1"),
-      fetch("data/scene.bin?v=1").then(function(r){
-        if(!r.ok) throw new Error("data/scene.bin " + r.status);
-        return r.arrayBuffer();
+      fetch("data/scene.txt?v=1").then(function(r){
+        if(!r.ok) throw new Error("data/scene.txt " + r.status);
+        return r.text();
       })
     ]).then(function(got){
+      if(started) return;           /* второй раз собирать нельзя: один холст */
+      started = true;
       window.startFX(got[1]);
       dispatchEvent(new Event("fxready"));
     }).catch(function(e){
       console.error("Сцена не загрузилась:", e);
-      going = null;                 /* пусть будет второй шанс */
+      if(!started) going = null;    /* можно попробовать ещё раз */
     });
     return going;
   };
 
-  /* Запасной повод: человек тронул страницу, а загрузка ещё не начиналась.
-     Пока висит заставка — не трогаем: там играет ролик 4K, и делить канал
-     с ним незачем. */
+  /* Запасной повод: сцены нет, а человек уже крутит страницу */
   var EV = ["wheel", "touchstart", "pointerdown"];
   function kick(){
-    if(document.getElementById("ayLoad")) return;   /* заставка ещё на экране */
     EV.forEach(function(e){ removeEventListener(e, kick); });
     window.loadFX();
   }
@@ -1580,9 +1585,8 @@ syncProt();
   var elNum   = document.getElementById("ayLoadN");
   var elEnter = document.getElementById("ayEnter");
 
-  /* вес каждого шага — чтобы полоса шла честно, а не по таймеру.
-     Библиотеки 3D тут больше нет: она грузится после входа, отдельно. */
-  var STEPS = { data:16, main:44, font:12, first:28 };
+  /* вес каждого шага — чтобы полоса шла честно, а не по таймеру */
+  var STEPS = { data:12, three:34, main:30, font:8, first:16 };
   var done = 0, total = 0, shown = 0;
   for(var k in STEPS) total += STEPS[k];
 
@@ -1643,6 +1647,14 @@ syncProt();
       .catch(function(){ step("font"); });
   } else { step("font"); }
 
+  /* Сцена рабочего стола: библиотека и данные идут в фоне, с первой же секунды,
+     параллельно с данными сайта и кодом. Если что-то не пришло за 15 секунд —
+     не держим человека на заставке, сцена доедет сама. */
+  var fxDone = Promise.race([
+    window.loadFX ? window.loadFX() : Promise.resolve(),
+    new Promise(function(res){ setTimeout(res, 15000); })
+  ]);
+
   /* сначала сервер (там правки из админки), иначе файлы из папки data */
   getJSON("api/data")
     .then(function(d){
@@ -1654,10 +1666,12 @@ syncProt();
       return Promise.all([ getJSON("data/site.json"), getJSON("data/desk.json") ])
         .then(function(d){ inject("SITE_DATA", d[0]); inject("DESK_LAYOUT", d[1]); });
     })
-    .then(function(){ step("data"); return null; })
-    .then(function(){ return load("js/main.js?v=5"); })
+    .then(function(){ step("data"); return load("js/main.js?v=6"); })
     .then(function(){
       step("main");
+      return fxDone.then(function(){ step("three"); });
+    })
+    .then(function(){
       /* ждём первый настоящий кадр, иначе заставка уйдёт в пустоту */
       return new Promise(function(res){
         requestAnimationFrame(function(){ requestAnimationFrame(function(){
@@ -1751,7 +1765,6 @@ syncProt();
     if(entered) return;
     entered = true;
     if(window.startSiteAudio) startSiteAudio();      /* музыка со звуком */
-    if(window.loadFX) setTimeout(window.loadFX, 400);  /* сцена стола — сразу после входа */
     setTimeout(warmMedia, 900);   /* канал освободился — тянем медиа кейсов в фоне */
     elLoad.classList.add("gone");
     setTimeout(function(){

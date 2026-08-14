@@ -414,7 +414,8 @@ function iconImage(it){
   if(it.type === "track")  return it.cover || TRACK_ICON;
   if(it.type === "folder") return it.cover || FOLDER_ICON;
   var p = (DATA.site.projects || [])[it.ref || 0];
-  return (p && (p.cover || p.coverHover)) || FOLDER_ICON;
+  /* тот же порядок, что на сайте: свой значок этой плитки → значок кейса → обложка */
+  return it.cover || (p && (p.deskIcon || p.cover || p.coverHover)) || FOLDER_ICON;
 }
 function iconLabel(it){
   if(it.label) return it.label;
@@ -637,6 +638,12 @@ function drawSel(){
       it.ref = +s.value; touch(); drawDesk(); drawIconList();
     });
     body.appendChild(wrap);
+
+    body.appendChild(mediaField("Свой значок только для этой плитки", it.cover || "", function(v){
+      it.cover = v; touch(); drawDesk(); drawIconList();
+    }, "image",
+      "Обычно не нужно: значок берётся из самого кейса. Заполняйте, только если " +
+      "на столе у этой работы должна быть другая картинка."));
   }
 
   var pos = document.createElement("div");
@@ -1022,7 +1029,7 @@ function drawProjects(){
 $("#addProj").addEventListener("click", function(){
   DATA.site.projects.push({ title:"НОВЫЙ ПРОЕКТ", slug:"new-" + Date.now().toString(36),
     category:"", client:"", year:String(new Date().getFullYear()),
-    summary:"", cover:"", coverHover:"", coverVideo:"", blocks:[] });
+    summary:"", deskIcon:"", cover:"", coverHover:"", coverVideo:"", blocks:[] });
   curProj = DATA.site.projects.length - 1;
   touch(); drawProjects();
 });
@@ -1145,13 +1152,17 @@ function drawProjEdit(){
   var cov = document.createElement("div");
   cov.className = "card";
   cov.style.marginTop = "16px";
-  cov.innerHTML = '<h2>Обложка</h2>';
+  cov.innerHTML = '<h2>Значок и обложка</h2>';
   host.appendChild(cov);
-  [["cover","Картинка на столе и в превью","image"],
-   ["coverVideo","Видео в превью (необязательно)","video"]].forEach(function(f){
+  [["deskIcon", "Значок на рабочем столе", "image",
+    "Маленький квадрат — то, что видно на столе. Если оставить пустым, возьмётся обложка из поля ниже."],
+   ["cover", "Обложка в превью и в шапке кейса", "image",
+    "Широкая картинка: показывается при наведении и вверху страницы работы."],
+   ["coverVideo", "Видео в превью (необязательно)", "video", ""]
+  ].forEach(function(f){
     cov.appendChild(mediaField(f[1], p[f[0]] || "", function(v){
       p[f[0]] = v; touch(); drawDesk(); drawProjects(); paintPreview();
-    }, f[2]));
+    }, f[2], f[3]));
   });
 
   /* блоки */
@@ -1367,11 +1378,12 @@ function blockEditor(p, b, i){
 }
 
 /* поле «файл + кнопка выбора» */
-function mediaField(label, value, on, want){
+function mediaField(label, value, on, want, hint){
   var d = document.createElement("div");
   d.innerHTML = '<label>' + label + '</label><div class="pick">' +
     '<img class="thumb"><input type="text" placeholder="media/… или ссылка">' +
-    '<button class="btn">Выбрать</button></div>';
+    '<button class="btn">Выбрать</button></div>' +
+    (hint ? '<div class="hint" style="margin:5px 0 12px">' + hint + '</div>' : '');
   var img = d.querySelector(".thumb"), inp = d.querySelector("input"), btn = d.querySelector("button");
   function show(v){ img.src = v || ""; img.style.visibility = v ? "visible" : "hidden"; }
   inp.value = value || ""; show(value);
