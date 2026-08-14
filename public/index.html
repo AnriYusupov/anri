@@ -1,13 +1,3 @@
-/* ---------- кнопка звука: пункт меню наравне с WORK ---------- */
-#sndTop{display:flex;align-items:center;gap:6px;color:#fff;font-family:'Anton';font-size:12px;
-  letter-spacing:1.2px;cursor:pointer;white-space:nowrap;opacity:.62;transition:opacity .2s;
-  background:none;border:0;padding:0;pointer-events:auto;position:relative}
-#sndTop:hover{opacity:1}
-#sndTop.on{opacity:1}
-#sndTop i{width:9px;height:9px;display:block;background:currentColor;
-  clip-path:polygon(0 34%,28% 34%,58% 5%,58% 95%,28% 66%,0 66%)}
-#sndTop.on i{box-shadow:0 0 8px rgba(255,255,255,.7)}
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -24,6 +14,16 @@
 <meta property="og:image" content="og.jpg">
 <meta name="twitter:card" content="summary_large_image">
 <title>ANRI YUSUPOV — PORTFOLIO</title>
+
+<script>
+/* Браузер сам возвращает страницу туда, где её оставили. Здесь это ломает вход:
+   обновил — и ты уже посреди сайта, мимо заставки, а всё содержимое требуется
+   разом. Открываемся всегда сначала. */
+if("scrollRestoration" in history) history.scrollRestoration = "manual";
+scrollTo(0, 0);
+addEventListener("load", function(){ scrollTo(0, 0); });
+addEventListener("pageshow", function(e){ if(e.persisted) scrollTo(0, 0); });
+</script>
 <style>
 
 
@@ -420,6 +420,19 @@ body.gl #scene.gridmode .frame > img,body.gl #scene.gridmode .frame > video{opac
   #nav{gap:16px}
   #foot{padding:12px 16px;font-size:9px}
 }
+
+/* ---------- кнопка звука: пункт меню наравне с WORK ----------
+   Эти правила лежали ПЕРЕД <!DOCTYPE html>, то есть вообще вне разметки:
+   к кнопке они не применялись, а браузер из-за текста перед doctype
+   переходил в режим совместимости. Теперь они на своём месте. */
+#sndTop{display:flex;align-items:center;gap:6px;color:#fff;font-family:'Anton';font-size:12px;
+  letter-spacing:1.2px;cursor:pointer;white-space:nowrap;opacity:.62;transition:opacity .2s;
+  background:none;border:0;padding:0;pointer-events:auto;position:relative}
+#sndTop:hover{opacity:1}
+#sndTop.on{opacity:1}
+#sndTop i{width:9px;height:9px;display:block;background:currentColor;
+  clip-path:polygon(0 34%,28% 34%,58% 5%,58% 95%,28% 66%,0 66%)}
+#sndTop.on i{box-shadow:0 0 8px rgba(255,255,255,.7)}
 </style>
 </head>
 <body>
@@ -1728,6 +1741,18 @@ syncProt();
   var TOTAL_LIMIT = 80 * 1048576;    /* и в сумме больше столько не тянем */
   var spent = 0;
 
+  /* Ответ надо дочитать до конца — иначе браузер не положит его в свой кэш.
+     Но держать эти байты в памяти незачем: раньше здесь стоял arrayBuffer(),
+     и десятки мегабайт копились в куче, а потом сборщик мусора вставал колом
+     и всё дёргалось. Пропускаем поток мимо себя и ничего не храним. */
+  function drain(res){
+    if(!res.body || !res.body.getReader) return res.blob().then(function(){});
+    var rd = res.body.getReader();
+    return (function pump(){
+      return rd.read().then(function(x){ return x.done ? null : pump(); });
+    })();
+  }
+
   function warmMedia(){
     var list = collectMedia();
     if(!list.length) return;
@@ -1756,7 +1781,7 @@ syncProt();
           }
           if(n && spent + n > TOTAL_LIMIT) return null;   /* бюджет исчерпан */
           spent += n || 0;
-          return fetch(item.u).then(function(x){ return x.arrayBuffer(); });
+          return fetch(item.u).then(drain);
         }).then(done, done);
       } else {
         var im = new Image();
