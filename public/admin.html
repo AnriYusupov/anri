@@ -1383,9 +1383,37 @@ function mediaField(label, value, on, want, hint){
   d.innerHTML = '<label>' + label + '</label><div class="pick">' +
     '<img class="thumb"><input type="text" placeholder="media/… или ссылка">' +
     '<button class="btn">Выбрать</button></div>' +
-    (hint ? '<div class="hint" style="margin:5px 0 12px">' + hint + '</div>' : '');
-  var img = d.querySelector(".thumb"), inp = d.querySelector("input"), btn = d.querySelector("button");
-  function show(v){ img.src = v || ""; img.style.visibility = v ? "visible" : "hidden"; }
+    '<div class="wt hint" style="margin:5px 0 0"></div>' +
+    (hint ? '<div class="hint" style="margin:3px 0 12px">' + hint + '</div>' : '');
+  var img = d.querySelector(".thumb"), inp = d.querySelector("input"),
+      btn = d.querySelector("button"), wt = d.querySelector(".wt");
+
+  /* Сколько весит файл. Спрашиваем у сервера только заголовок — сам файл не
+     качаем. Тяжёлый ролик в превью — самая частая причина «сайт тормозит»,
+     поэтому вес видно сразу, а не после жалоб зрителей. */
+  var wtReq = 0;
+  function weigh(v){
+    var mine = ++wtReq;
+    wt.textContent = ""; wt.style.color = "";
+    if(!v || /^data:/.test(v)) return;
+    fetch(v, { method:"HEAD" }).then(function(r){
+      if(mine !== wtReq) return;
+      var n = parseInt(r.headers.get("content-length") || "", 10);
+      if(!n) return;
+      var mb = n / 1048576;
+      var isVid = want === "video" || /\.(mp4|mov|webm|m4v)(\?|$)/i.test(v);
+      var limit = isVid ? 15 : 1.5;
+      wt.textContent = (mb < 1 ? Math.round(n / 1024) + " КБ" : mb.toFixed(1) + " МБ") +
+        (mb > limit
+          ? " — тяжеловато. " + (isVid
+              ? "Для превью хватает 1080p и 5–8 секунд, это 2–4 МБ."
+              : "Картинку стоит пережать: обычно хватает 200–500 КБ.")
+          : " — нормально");
+      wt.style.color = mb > limit ? "var(--warn)" : "";
+    }).catch(function(){});
+  }
+
+  function show(v){ img.src = v || ""; img.style.visibility = v ? "visible" : "hidden"; weigh(v); }
   inp.value = value || ""; show(value);
   inp.addEventListener("input", function(){ show(inp.value); on(inp.value); });
   btn.addEventListener("click", function(){

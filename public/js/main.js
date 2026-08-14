@@ -82,6 +82,13 @@ PROJECTS.forEach(function(p,i){
     media = document.createElement("video");
     media.muted = true; media.loop = true; media.playsInline = true;
     media.setAttribute("playsinline","");
+    /* Эти «летающие плитки» остались от ранней версии: ниже по коду
+       scene.style.display = "none" прячет их насовсем. Но браузеру всё равно —
+       он видел src и честно качал КАЖДЫЙ ролик кейса целиком, при каждом
+       заходе, впустую. Отсюда и «сайт грузится вечно».
+       preload="none" — ни байта, пока кто-нибудь не нажмёт play. */
+    media.preload = "none";
+    media.setAttribute("preload", "none");
     media.src = p.videoSrc || VIDEO_SRC;
   } else {
     media = document.createElement("img");
@@ -558,6 +565,9 @@ function hideApp(){
       qlWin.classList.add("hasvid");
       if(qlPlayer.getAttribute("data-src") !== src){
         qlPlayer.setAttribute("data-src", src);
+        /* Пока ролик качается, окно было просто чёрным. Показываем обложку —
+           человек сразу видит работу, а видео подхватывается поверх. */
+        if(IMGS[proj.id]) qlPlayer.poster = IMGS[proj.id];
         qlPlayer.src = src;
         qlPlayer.load();
       }

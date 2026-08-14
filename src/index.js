@@ -88,6 +88,32 @@ async function writeStore(env, key, text) {
   return false;
 }
 
+/* Прогрев границы сети.
+   Пока зритель получает первый кусок, целиком тянем файл из хранилища и кладём
+   его в кэш ближайшего сервера Cloudflare. Со второго раза видео идёт оттуда —
+   без поездки в R2 на каждый кусок. Очень большие файлы пропускаем: кэш их
+   всё равно не возьмёт, а трафик потратим. */
+const WARM_LIMIT = 100 * 1024 * 1024;
+
+async function warmCache(env, key, cache, cacheKey) {
+  try {
+    if (await cache.match(cacheKey)) return;
+    const head = await env.MEDIA.head(key);
+    if (!head || head.size > WARM_LIMIT) return;
+    const obj = await env.MEDIA.get(key);
+    if (!obj) return;
+    const h = new Headers();
+    obj.writeHttpMetadata(h);
+    h.set("etag", obj.httpEtag);
+    h.set("accept-ranges", "bytes");
+    h.set("content-length", String(obj.size));
+    h.set("cache-control", "public, max-age=31536000, immutable");
+    await cache.put(cacheKey, new Response(obj.body, { headers: h }));
+  } catch (e) {
+    /* кэш — приятный бонус, а не условие работы */
+  }
+}
+
 async function loadData(env, request) {
   const url = new URL(request.url);
   const out = {};
@@ -198,6 +224,7 @@ export default {
            отдаёт ближайший к зрителю сервер Cloudflare — так же быстро, как
            обычная статика. Для запросов кусками кэш умеет резать сам. */
         const cache = caches.default;
+        const cacheKey = new Request(url.origin + url.pathname);
         const hit = await cache.match(request);
         if (hit) return hit;
 
@@ -240,9 +267,21 @@ export default {
             h.set("content-range", `bytes ${start}-${end}/${size}`);
             h.set("content-length", String(end - start + 1));
             h.set("cache-control", "public, max-age=31536000, immutable");
-            const partRes = new Response(part.body, { status: 206, headers: h });
-            if (ctx && ctx.waitUntil) ctx.waitUntil(cache.put(request, partRes.clone()));
-            return partRes;
+            /* Раньше здесь стояло cache.put(request, partRes.clone()).
+               Так делать нельзя по двум причинам:
+               1) Cache API отказывается хранить ответы 206 и бросает ошибку,
+                  то есть кусок всё равно никогда не кэшировался;
+               2) clone() раздваивает поток, и раз вторую половину никто не читал,
+                  отдача упиралась в буфер — видео шло рывками и подолгу.
+
+               Кусок отдаём сразу, а целый файл кладём на границу сети в фоне.
+               Дальше все куски режет уже кэш, и в хранилище никто не ездит.
+               Греем только на первом куске (start === 0) — иначе один ролик
+               запустил бы прогрев столько раз, сколько браузер просит кусков. */
+            if (start === 0 && ctx && ctx.waitUntil) {
+              ctx.waitUntil(warmCache(env, key, cache, cacheKey));
+            }
+            return new Response(part.body, { status: 206, headers: h });
           }
         }
 
@@ -255,7 +294,14 @@ export default {
         h.set("content-length", String(obj.size));
         h.set("cache-control", "public, max-age=31536000, immutable");
         const full = new Response(obj.body, { headers: h });
-        if (ctx && ctx.waitUntil) ctx.waitUntil(cache.put(request, full.clone()));
+        /* Целый файл кэшировать можно и нужно: дальше границе сети хватит его,
+           чтобы самой нарезать куски. Ключ — без Range и без «?…», чтобы куски
+           потом попадали в ту же запись. Ошибку кэша глотаем: отдача важнее. */
+        if (ctx && ctx.waitUntil) {
+          ctx.waitUntil(
+            Promise.resolve(cache.put(cacheKey, full.clone())).catch(() => {})
+          );
+        }
         return full;
       }
 

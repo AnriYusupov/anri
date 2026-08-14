@@ -1724,6 +1724,10 @@ syncProt();
     return uniq;
   }
 
+  var ONE_LIMIT   = 12 * 1048576;    /* один ролик тяжелее — не греем */
+  var TOTAL_LIMIT = 80 * 1048576;    /* и в сумме больше столько не тянем */
+  var spent = 0;
+
   function warmMedia(){
     var list = collectMedia();
     if(!list.length) return;
@@ -1735,10 +1739,25 @@ syncProt();
       var done = function(){ busy--; next(); };
 
       if(item.v){
-        /* у видео тянем начало файла: браузеру хватит, чтобы начать показ сразу */
-        fetch(item.u, { headers: { Range: "bytes=0-2000000" } })
-          .then(function(r){ return r.arrayBuffer(); })
-          .then(done, done);
+        /* Раньше здесь тянулось начало файла запросом с Range. Толку от этого
+           не было никакого: браузер НЕ КЛАДЁТ в свой кэш ответы «кусок файла»
+           (206). То есть трафик тратился, а когда человек наводился на работу,
+           видео качалось заново с нуля.
+
+           Теперь берём ролик целиком — такой ответ браузер сохраняет, и показ
+           при наведении получается мгновенным. Тяжёлые файлы пропускаем и
+           говорим об этом в консоли: их надо пережать, а не возить впустую. */
+        fetch(item.u, { method: "HEAD" }).then(function(r){
+          var n = parseInt(r.headers.get("content-length") || "0", 10);
+          if(n && n > ONE_LIMIT){
+            console.warn("Слишком тяжёлый ролик, прогрев пропущен (" +
+              Math.round(n/1048576) + " МБ): " + item.u);
+            return null;
+          }
+          if(n && spent + n > TOTAL_LIMIT) return null;   /* бюджет исчерпан */
+          spent += n || 0;
+          return fetch(item.u).then(function(x){ return x.arrayBuffer(); });
+        }).then(done, done);
       } else {
         var im = new Image();
         im.onload = done; im.onerror = done;
