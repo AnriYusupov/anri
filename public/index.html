@@ -7,6 +7,15 @@
 <meta name="theme-color" content="#050505">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 
+<!-- Библиотека 3D и данные фигуры. В 16-й версии они лежали прямо в разметке,
+     и браузер начинал качать их сразу, ещё разбирая страницу. Когда я вынес их
+     в отдельные файлы, качать они стали ПОЗЖЕ — только когда доходил черёд до
+     загрузчика. Отсюда и «раньше было мгновенно». Эти две строки возвращают
+     прежний порядок: запрос уходит с первых миллисекунд, вместе со всем остальным. -->
+<link rel="preload" as="script" href="js/three.min.js?v=1">
+<link rel="preload" as="fetch" href="data/scene.txt?v=1" crossorigin="anonymous">
+<link rel="preload" as="script" href="js/main.js?v=6">
+
 <!-- превью ссылки в мессенджерах и соцсетях -->
 <meta property="og:type" content="website">
 <meta property="og:title" content="ANRI YUSUPOV — Portfolio">
@@ -1685,6 +1694,16 @@ syncProt();
       return fxDone.then(function(){ step("three"); });
     })
     .then(function(){
+      /* Первый кадр заглавного экрана. Без него ENTER открывался в чёрное:
+         кадр ехал уже после входа. Ждём его, но не вечно — 8 секунд, и дальше. */
+      if(window.__heroReady) return null;
+      return new Promise(function(res){
+        var t = setTimeout(done, 8000);
+        function done(){ clearTimeout(t); removeEventListener("heroready", done); res(null); }
+        addEventListener("heroready", done);
+      });
+    })
+    .then(function(){
       /* ждём первый настоящий кадр, иначе заставка уйдёт в пустоту */
       return new Promise(function(res){
         requestAnimationFrame(function(){ requestAnimationFrame(function(){
@@ -1737,22 +1756,6 @@ syncProt();
     return uniq;
   }
 
-  var ONE_LIMIT   = 12 * 1048576;    /* один ролик тяжелее — не греем */
-  var TOTAL_LIMIT = 80 * 1048576;    /* и в сумме больше столько не тянем */
-  var spent = 0;
-
-  /* Ответ надо дочитать до конца — иначе браузер не положит его в свой кэш.
-     Но держать эти байты в памяти незачем: раньше здесь стоял arrayBuffer(),
-     и десятки мегабайт копились в куче, а потом сборщик мусора вставал колом
-     и всё дёргалось. Пропускаем поток мимо себя и ничего не храним. */
-  function drain(res){
-    if(!res.body || !res.body.getReader) return res.blob().then(function(){});
-    var rd = res.body.getReader();
-    return (function pump(){
-      return rd.read().then(function(x){ return x.done ? null : pump(); });
-    })();
-  }
-
   function warmMedia(){
     var list = collectMedia();
     if(!list.length) return;
@@ -1764,25 +1767,17 @@ syncProt();
       var done = function(){ busy--; next(); };
 
       if(item.v){
-        /* Раньше здесь тянулось начало файла запросом с Range. Толку от этого
-           не было никакого: браузер НЕ КЛАДЁТ в свой кэш ответы «кусок файла»
-           (206). То есть трафик тратился, а когда человек наводился на работу,
-           видео качалось заново с нуля.
+        /* Видео здесь НЕ трогаем.
 
-           Теперь берём ролик целиком — такой ответ браузер сохраняет, и показ
-           при наведении получается мгновенным. Тяжёлые файлы пропускаем и
-           говорим об этом в консоли: их надо пережать, а не возить впустую. */
-        fetch(item.u, { method: "HEAD" }).then(function(r){
-          var n = parseInt(r.headers.get("content-length") || "0", 10);
-          if(n && n > ONE_LIMIT){
-            console.warn("Слишком тяжёлый ролик, прогрев пропущен (" +
-              Math.round(n/1048576) + " МБ): " + item.u);
-            return null;
-          }
-          if(n && spent + n > TOTAL_LIMIT) return null;   /* бюджет исчерпан */
-          spent += n || 0;
-          return fetch(item.u).then(drain);
-        }).then(done, done);
+           Сначала тут стоял запрос куска (Range) — бесполезный: браузер такие
+           ответы не кэширует. Потом я стал качать ролики целиком — и стало хуже
+           всего: сразу после входа канал забивался десятками мегабайт, и сайт
+           «умирал» ровно тогда, когда человек начинал смотреть.
+
+           Ролик нужен в одном месте — при наведении на работу. Тогда и качается,
+           а Cloudflare отдаёт его со своего ближайшего сервера. Заранее возить
+           весь портфель по проводу незачем. */
+        done();
       } else {
         var im = new Image();
         im.onload = done; im.onerror = done;

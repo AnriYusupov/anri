@@ -565,9 +565,10 @@ function hideApp(){
       qlWin.classList.add("hasvid");
       if(qlPlayer.getAttribute("data-src") !== src){
         qlPlayer.setAttribute("data-src", src);
-        /* Пока ролик качается, окно было просто чёрным. Показываем обложку —
-           человек сразу видит работу, а видео подхватывается поверх. */
-        if(IMGS[proj.id]) qlPlayer.poster = IMGS[proj.id];
+        /* Обложку сюда не ставим. Она была нужна, пока ролик качался долго,
+           но теперь он лежит в кэше и стартует сразу — и подмена картинки
+           на видео читается как рывок. Пусть сразу идёт видео. */
+        qlPlayer.removeAttribute("poster");
         qlPlayer.src = src;
         qlPlayer.load();
       }
@@ -1089,8 +1090,14 @@ function loadFrame(i, cb){
   im.src = FRAMES[i];
   imgs[i] = im;
 }
-/* first frame ASAP, then the rest */
-loadFrame(0, function(){ fShown = -1; });
+/* Первый кадр — как можно раньше, остальные следом.
+   О готовности первого кадра сообщаем наружу: заставка ждёт этот сигнал,
+   иначе после ENTER человек упирается в чёрный экран, пока кадр едет. */
+loadFrame(0, function(){
+  fShown = -1;
+  window.__heroReady = true;
+  dispatchEvent(new Event("heroready"));
+});
 (function preloadRest(i){
   if(i >= FRAMES.length) return;
   loadFrame(i);
