@@ -11,6 +11,8 @@
   Cache-Control: no-cache
 /admin.html
   Cache-Control: no-cache
+/speed.html
+  Cache-Control: no-cache
 
 # Библиотека 3D и данные фигуры не меняются от правки к правке, а весят много.
 # Пусть лежат в кэше браузера: при замене к адресу дописывается новая версия
