@@ -1396,6 +1396,14 @@ function mediaField(label, value, on, want, hint, light){
     var mine = ++wtReq;
     wt.textContent = ""; wt.style.color = "";
     if(!v || /^data:/.test(v)) return;
+    /* Ролик из Stream — не файл, а поток. Вес мерить бессмысленно и не нужно:
+       зритель получит ту версию, которую тянет его канал. */
+    if(/\.m3u8(\?|$)/i.test(v)){
+      wt.textContent = "видео потоком — вес значения не имеет";
+      wt.style.color = "var(--ok)";
+      img.style.visibility = "hidden";
+      return;
+    }
     fetch(v, { method:"HEAD" }).then(function(r){
       if(mine !== wtReq) return;
       var n = parseInt(r.headers.get("content-length") || "", 10);
@@ -1513,6 +1521,84 @@ $("#upFile").addEventListener("change", function(){
 
 var heavyOK = null;   /* имя+размер файла, для которого вес уже подтвердили */
 
+/* ============================================================
+   Заливка видео в Cloudflare Stream
+   ============================================================
+   Три шага. Файл идёт мимо нашего сервера — прямо в Cloudflare:
+     1) просим у своего сервера одноразовый адрес,
+     2) льём туда файл (XHR, чтобы видеть проценты),
+     3) ждём, пока Cloudflare пережмёт, и забираем адрес потока.
+   В поле сохраняется адрес вида …/manifest/video.m3u8 — сайт узнаёт его
+   по расширению и включает потоковый плеер. */
+function uploadToStream(f, stat){
+  var mb = (f.size / 1048576).toFixed(1);
+
+  if(f.size > 200 * 1048576){
+    stat.style.color = "var(--accent)";
+    stat.textContent = "Ролик " + mb + " МБ — больше предела в 200 МБ на одну заливку. " +
+      "Нужен файл потяжелее — скажите, подключим отдельный режим для больших.";
+    return;
+  }
+
+  stat.style.color = "var(--dim)";
+  stat.textContent = "Готовлю заливку…";
+  say("Заливаю " + f.name + " в Stream…");
+
+  api("stream/upload", { method:"POST" }).then(function(r){
+    return new Promise(function(res, rej){
+      var fd = new FormData();
+      fd.append("file", f);
+      var xhr = new XMLHttpRequest();
+      xhr.open("POST", r.uploadURL, true);
+      xhr.upload.onprogress = function(e){
+        if(!e.lengthComputable) return;
+        var pct = Math.round(e.loaded / e.total * 100);
+        stat.textContent = "Заливаю «" + f.name + "» — " + pct + "% из " + mb + " МБ";
+      };
+      xhr.onload = function(){
+        /* Cloudflare отвечает 200 при успехе; тело нам не нужно, номер уже есть */
+        if(xhr.status >= 200 && xhr.status < 300) res(r.uid);
+        else rej(new Error("Cloudflare не принял файл (" + xhr.status + ")"));
+      };
+      xhr.onerror = function(){ rej(new Error("Обрыв связи при заливке")); };
+      xhr.send(fd);
+    });
+  }).then(function(uid){
+    stat.textContent = "Файл принят. Cloudflare пережимает ролик…";
+    return waitStream(uid, stat);
+  }).then(function(v){
+    stat.style.color = "var(--ok)";
+    stat.textContent = "Готово: " + f.name + " — " +
+      (v.duration ? Math.round(v.duration) + " сек, " : "") + "играет потоком";
+    say("Видео готово", "ok");
+    MEDIA.unshift({ url:v.hls, kind:"video", bytes:f.size });
+    if(pickTarget){ pickTarget(v.hls, "video", f.name); closeMedia(); }
+  }).catch(function(e){
+    stat.style.color = "var(--accent)";
+    stat.textContent = "Не получилось: " + e.message;
+    say(e.message, "err");
+  });
+}
+
+/* Ждём, пока ролик пережмётся. Спрашиваем раз в три секунды, но не вечно:
+   через десять минут сдаёмся и говорим честно, вместо бесконечной крутилки. */
+function waitStream(uid, stat){
+  var until = Date.now() + 10 * 60 * 1000;
+  return new Promise(function(res, rej){
+    (function ask(){
+      api("stream/video/" + uid).then(function(v){
+        if(v.ready && v.hls) return res(v);
+        if(v.state === "error") return rej(new Error("Cloudflare не смог обработать этот файл"));
+        if(Date.now() > until) return rej(new Error("Обработка идёт слишком долго — загляните позже в панель Stream"));
+        stat.textContent = "Cloudflare пережимает ролик" +
+          (v.progress != null ? " — " + Math.round(v.progress) + "%" : "…") +
+          " Можно не ждать, но поле заполнится только после готовности.";
+        setTimeout(ask, 3000);
+      }).catch(rej);
+    })();
+  });
+}
+
 function handleUpload(f){
   var stat = $("#upStat");
   var mb = (f.size / 1048576).toFixed(1);
@@ -1530,26 +1616,16 @@ function handleUpload(f){
     stat.textContent = "Это не музыка (" + (f.type || "неизвестный тип") + "). Нужен файл .mp3";
     return;
   }
+  /* Видео идёт в Cloudflare Stream — там оно превращается в лесенку версий
+     и играет потоком. Вес ролика больше не имеет значения, поэтому никаких
+     предупреждений о тяжести и никакого предела в 100 МБ для него нет. */
+  if(isVideo) return uploadToStream(f, stat);
+
   if(f.size > 100 * 1048576){
     stat.style.color = "var(--accent)";
-    stat.textContent = "Файл " + mb + " МБ — больше предела в 100 МБ. Сожмите видео и попробуйте снова.";
+    stat.textContent = "Файл " + mb + " МБ — больше предела в 100 МБ. Сожмите и попробуйте снова.";
     return;
   }
-
-  /* Тяжёлое видео — главная причина, по которой сайт кажется медленным.
-     Не запрещаем: полный ролик внутри кейса иногда и должен быть большим.
-     Но предупреждаем и просим подтвердить, чтобы это был осознанный выбор,
-     а не случайно залитый мастер. */
-  if(pickWant === "video" && isVideo && f.size > 15 * 1048576 && heavyOK !== f.name + f.size){
-    heavyOK = f.name + f.size;
-    stat.style.color = "var(--warn)";
-    stat.textContent = "Ролик весит " + mb + " МБ. Если это превью при наведении — " +
-      "много: его нельзя подгрузить заранее, зритель будет ждать. " +
-      "Для превью нормально 1080p, 5–8 секунд, 2–4 МБ. " +
-      "Если файл для страницы кейса — всё в порядке, выберите его ещё раз.";
-    return;
-  }
-  heavyOK = null;
 
   stat.style.color = "var(--dim)";
   stat.textContent = "Загружаю «" + f.name + "» (" + mb + " МБ)… для видео это может занять минуту.";

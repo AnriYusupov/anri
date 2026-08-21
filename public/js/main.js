@@ -2,6 +2,45 @@
 (function(){
 "use strict";
 
+/* ---------------- видео: файл или поток ----------------
+   Ролики из Cloudflare Stream приходят адресом на …/manifest/video.m3u8.
+   Это не файл, а список кусков: плеер берёт ту версию, которую тянет канал,
+   и начинает играть сразу, не скачивая всё целиком.
+
+   Safari понимает такие адреса сам. Остальным нужен маленький плеер hls.js —
+   и грузим мы его только тогда, когда первый поток действительно понадобился,
+   чтобы обычные посетители за него не платили.
+
+   Старые ролики из хранилища (обычные .mp4) работают как работали. */
+var hlsLib = null;
+function loadHls(){
+  if(hlsLib) return hlsLib;
+  hlsLib = new Promise(function(res, rej){
+    var s = document.createElement("script");
+    s.src = "js/hls.min.js?v=1";
+    s.onload = function(){ res(window.Hls); };
+    s.onerror = function(){ hlsLib = null; rej(new Error("hls.js не загрузился")); };
+    document.head.appendChild(s);
+  });
+  return hlsLib;
+}
+function isStream(url){ return /\.m3u8(\?|$)/i.test(url || ""); }
+
+function setVideoSrc(el, url){
+  if(!el || !url) return;
+  if(el.__hls){ try{ el.__hls.destroy(); }catch(e){} el.__hls = null; }
+  if(!isStream(url)){ el.src = url; return; }
+  /* Safari и iPhone играют поток нативно — лишний плеер им не нужен */
+  if(el.canPlayType && el.canPlayType("application/vnd.apple.mpegurl")){ el.src = url; return; }
+  loadHls().then(function(Hls){
+    if(!Hls || !Hls.isSupported()){ el.src = url; return; }
+    var h = new Hls({ maxBufferLength: 12 });   /* не набираем лишнего впрок */
+    h.loadSource(url);
+    h.attachMedia(el);
+    el.__hls = h;
+  }).catch(function(){ el.src = url; });   /* не вышло — пусть браузер пробует сам */
+}
+
 /* ---------------- site data (written by the admin panel) ---------------- */
 var SITE = (function(){
   try{ return JSON.parse(document.getElementById("SITE_DATA").textContent); }
@@ -89,6 +128,11 @@ PROJECTS.forEach(function(p,i){
        preload="none" — ни байта, пока кто-нибудь не нажмёт play. */
     media.preload = "none";
     media.setAttribute("preload", "none");
+    /* Здесь НЕ setVideoSrc: это те самые невидимые плитки, спрятанные
+       через scene.style.display = "none". Потоковый плеер игнорирует
+       preload="none" и начал бы качать видео в никуда — ровно то, от чего
+       мы избавились раньше. Кладём адрес как есть: с preload="none"
+       браузер не тронет его, пока никто не нажмёт play. */
     media.src = p.videoSrc || VIDEO_SRC;
   } else {
     media = document.createElement("img");
@@ -569,7 +613,7 @@ function hideApp(){
            но теперь он лежит в кэше и стартует сразу — и подмена картинки
            на видео читается как рывок. Пусть сразу идёт видео. */
         qlPlayer.removeAttribute("poster");
-        qlPlayer.src = src;
+        setVideoSrc(qlPlayer, src);
         qlPlayer.load();
       }
       try{ qlPlayer.currentTime = 0; }catch(e){}
@@ -692,7 +736,7 @@ function openFolder(folder){
         media.muted = true; media.loop = true;
       media.playsInline = true; media.autoplay = true;
       media.preload = "metadata";        /* сначала только заголовок, не весь файл */
-      media.src = f.src;
+      setVideoSrc(media, f.src);
     } else {
       media = document.createElement("img");
       media.src = f.src;
@@ -810,7 +854,7 @@ function renderBlocks(blocks, host){
       if(b.src){ var v=el("video"); v.controls=true; v.muted=true; v.loop=true; v.playsInline=true;
         v.preload="metadata";              /* тянем заголовок, а не весь ролик */
         if(b.poster) v.poster=b.poster;
-        v.setAttribute("playsinline",""); v.src=b.src; w.appendChild(v); }
+        v.setAttribute("playsinline",""); setVideoSrc(v, b.src); w.appendChild(v); }
       if(b.caption) w.appendChild(el("div","cb-cap",b.caption)); }
     else if(b.type==="embed"){ w.className="cb";
       var e2=el("div","cb-embed"); var f=el("iframe"); f.src=embedURL(b.url); f.allow="autoplay; fullscreen; picture-in-picture";
@@ -929,7 +973,7 @@ function openLB(p, srcMedia){
     m.muted = true; m.loop = true; m.autoplay = true; m.playsInline = true;
     m.setAttribute("playsinline","");
     if(srcMedia.poster) m.poster = srcMedia.poster;
-    m.src = srcMedia.src;
+    setVideoSrc(m, srcMedia.src);
     m.id = "lbMedia";
   } else {
     m = document.createElement("img");
@@ -1055,7 +1099,7 @@ if(reduced){
   document.getElementById("foot").classList.add("on");
   scene.classList.add("gridmode");
   var rv = document.createElement("video");
-  rv.src = VIDEO_SRC; rv.muted = true; rv.loop = true; rv.setAttribute("playsinline","");
+  setVideoSrc(rv, VIDEO_SRC); rv.muted = true; rv.loop = true; rv.setAttribute("playsinline","");
   rv.setAttribute("controls","");
   heroCan.replaceWith(rv);
   boxes.forEach(function(b){ if(b.p.video){ b.media.setAttribute("controls",""); } });

@@ -20,5 +20,7 @@
 # Правила ниже перекрывают общие, что заданы выше.
 /js/three.min.js
   Cache-Control: public, max-age=31536000, immutable
+/js/hls.min.js
+  Cache-Control: public, max-age=31536000, immutable
 /data/scene.txt
   Cache-Control: public, max-age=31536000, immutable

@@ -88,6 +88,37 @@ async function writeStore(env, key, text) {
   return false;
 }
 
+/* ============================================================
+   Cloudflare Stream — видео потоком вместо файла
+   ============================================================
+   Раньше ролики лежали в R2 обычными файлами: браузер тянул их подряд,
+   с начала, и чтобы играть без запинок ему нужен был весь битрейт файла.
+   Тяжёлый ролик у зрителя со слабым каналом просто не стартовал.
+
+   Stream принимает мастер как есть и сам делает из него лесенку версий —
+   4K, 1080p, 720p, 540p. Плеер берёт ту, которую канал реально тянет,
+   и начинает играть с первых секунд. Целиком файл не качается никогда.
+
+   Заливка идёт в два шага, и файл НЕ проходит через этот воркер:
+     1) админка просит здесь одноразовый адрес,
+     2) браузер льёт файл прямо на него, в Cloudflare.
+   Так воркер не упирается в свои лимиты, а заливка не зависит от него.
+
+   Ключ лежит в секрете STREAM_TOKEN (настройки воркера).
+   Номер аккаунта не секрет — он виден в адресе панели. */
+const STREAM_ACCOUNT = "f92c4b00c250c1284528de3f04a0c723";
+
+function streamApi(env, path, init) {
+  const acc = env.STREAM_ACCOUNT || STREAM_ACCOUNT;
+  return fetch("https://api.cloudflare.com/client/v4/accounts/" + acc + "/stream" + path, {
+    ...init,
+    headers: {
+      authorization: "Bearer " + env.STREAM_TOKEN,
+      ...((init && init.headers) || {}),
+    },
+  });
+}
+
 /* Прогрев границы сети.
    Пока зритель получает первый кусок, целиком тянем файл из хранилища и кладём
    его в кэш ближайшего сервера Cloudflare. Со второго раза видео идёт оттуда —
@@ -192,6 +223,55 @@ export default {
           await writeStore(env, "desk", JSON.stringify(body.desk));
         }
         return json({ ok: true, savedAt: new Date().toISOString() });
+      }
+
+      /* Шаг 1 заливки: просим у Cloudflare одноразовый адрес.
+         maxDurationSeconds резервирует минуты из оплаченных; после обработки
+         лишнее возвращается обратно. Берём час — с запасом на любой мастер. */
+      if (route === "stream/upload" && method === "POST") {
+        if (!(await isAuthed(request, env))) return json({ error: "Нужен вход" }, 401);
+        if (!env.STREAM_TOKEN)
+          return json({ error: "Не настроен STREAM_TOKEN в секретах воркера" }, 501);
+
+        const res = await streamApi(env, "/direct_upload", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ maxDurationSeconds: 3600, requireSignedURLs: false }),
+        });
+        const data = await res.json().catch(() => null);
+        if (!res.ok || !data || !data.success) {
+          const why = data && data.errors && data.errors[0] && data.errors[0].message;
+          return json({ error: "Stream отказал: " + (why || res.status) }, 502);
+        }
+        return json({ uploadURL: data.result.uploadURL, uid: data.result.uid });
+      }
+
+      /* Шаг 2: пока Cloudflare пережимает ролик, админка спрашивает, готов ли он.
+         Отдаём ответ как есть — не угадываем поля, а показываем, что пришло. */
+      if (route.startsWith("stream/video/") && method === "GET") {
+        if (!(await isAuthed(request, env))) return json({ error: "Нужен вход" }, 401);
+        if (!env.STREAM_TOKEN)
+          return json({ error: "Не настроен STREAM_TOKEN в секретах воркера" }, 501);
+
+        const uid = route.slice("stream/video/".length);
+        if (!/^[a-zA-Z0-9]+$/.test(uid)) return json({ error: "Плохой номер ролика" }, 400);
+
+        const res = await streamApi(env, "/" + uid, { method: "GET" });
+        const data = await res.json().catch(() => null);
+        if (!res.ok || !data || !data.success) {
+          const why = data && data.errors && data.errors[0] && data.errors[0].message;
+          return json({ error: "Stream отказал: " + (why || res.status) }, 502);
+        }
+        const v = data.result || {};
+        return json({
+          ready: !!v.readyToStream,
+          state: (v.status && v.status.state) || "",
+          progress: (v.status && v.status.pctComplete) || null,
+          hls: (v.playback && v.playback.hls) || "",
+          thumbnail: v.thumbnail || "",
+          duration: v.duration || 0,
+          raw: v,          /* на случай, если поля называются иначе — увижу и поправлю */
+        });
       }
 
       if (route === "upload" && method === "POST") {
