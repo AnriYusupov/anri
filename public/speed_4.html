@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Измеритель скорости — ANRI YUSUPOV</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0b0b0d;color:#d8dae0;font:13px/1.5 ui-monospace,Menlo,Consolas,monospace;padding:22px}
+h1{font-size:15px;letter-spacing:.14em;color:#fff;margin-bottom:4px;text-transform:uppercase}
+.sub{color:#7c8089;margin-bottom:18px;font-size:12px}
+button{background:#fff;color:#000;border:0;border-radius:7px;padding:10px 18px;
+ font:600 12px/1 ui-monospace,monospace;letter-spacing:.08em;cursor:pointer;margin-right:8px}
+button.alt{background:#24262c;color:#e6e8ec}
+button:disabled{opacity:.45;cursor:default}
+#bar{margin:16px 0;color:#8b8f98}
+table{border-collapse:collapse;width:100%;margin-top:14px;font-size:12px}
+th,td{text-align:left;padding:6px 9px;border-bottom:1px solid #1e2026;vertical-align:top}
+th{color:#7c8089;font-weight:500;text-transform:uppercase;letter-spacing:.1em;font-size:10px}
+td.n{text-align:right;white-space:nowrap}
+.grp td{background:#15161a;color:#fff;letter-spacing:.12em;font-size:10px;text-transform:uppercase}
+.ok{color:#63c08a}.warn{color:#e0b04e}.bad{color:#e8402a}
+.u{color:#9aa0aa;word-break:break-all}
+#out{width:100%;height:180px;margin-top:16px;background:#111216;color:#c9ccd3;border:1px solid #24262c;
+ border-radius:8px;padding:11px;font:11px/1.45 ui-monospace,monospace;display:none}
+.hint{color:#6d7079;font-size:11px;margin-top:10px}
+</style>
+</head>
+<body>
+
+<h1>Измеритель скорости сайта</h1>
+<div class="sub">Ничего не меняет. Только замеряет и показывает, что тормозит.</div>
+
+<button id="go">Замерить</button>
+<button id="go2" class="alt">Замерить ещё раз (проверка кэша)</button>
+<button id="copy" class="alt" disabled>Скопировать отчёт</button>
+
+<div id="bar"></div>
+<table id="t"><thead><tr>
+  <th>Файл</th><th class="n">Вес</th><th class="n">Время</th><th class="n">Скорость</th><th>Откуда</th>
+</tr></thead><tbody id="tb"></tbody></table>
+
+<textarea id="out" readonly></textarea>
+<div class="hint">Первый замер греет кэш. Второй показывает, как будет у обычного зрителя.
+Пришли Anri картинку таблицы или нажми «Скопировать отчёт» и вставь текстом.</div>
+
+<script>
+/* ---------------------------------------------------------------
+   Страница-измеритель. Живёт отдельно от сайта, ни на что не влияет.
+   Задача: узнать вес каждого файла, время ответа и реальную скорость
+   отдачи — чтобы не гадать, а видеть.
+   --------------------------------------------------------------- */
+var tb = document.getElementById("tb"), bar = document.getElementById("bar");
+var out = document.getElementById("out"), lines = [];
+var TOTAL_SITE = 0;   /* сюда копится реальный вес всего, что грузит сайт */
+function addWeight(bytes){ if(bytes) TOTAL_SITE += bytes / 1048576; }
+
+function kb(n){
+  if(n == null) return "—";
+  if(n < 1024) return n + " Б";
+  if(n < 1048576) return (n/1024).toFixed(0) + " КБ";
+  return (n/1048576).toFixed(1) + " МБ";
+}
+function ms(n){ return n < 1000 ? Math.round(n) + " мс" : (n/1000).toFixed(1) + " с"; }
+function speed(bytes, msec){
+  if(!bytes || !msec) return "—";
+  var mbit = (bytes * 8 / 1048576) / (msec / 1000);
+  return mbit.toFixed(1) + " Мбит/с";
+}
+function cls(msec, bytes){
+  /* Медленно — это когда ждёшь. Для мелочи порог строже. */
+  var limit = (bytes && bytes > 2097152) ? 3000 : 800;
+  return msec > limit * 2 ? "bad" : (msec > limit ? "warn" : "ok");
+}
+
+function group(name){
+  var tr = tb.insertRow(); tr.className = "grp";
+  var td = tr.insertCell(); td.colSpan = 5; td.textContent = name;
+  lines.push("", "== " + name + " ==");
+}
+
+function row(label, url, r){
+  var tr = tb.insertRow();
+  tr.insertCell().innerHTML = label + '<br><span class="u">' + url + "</span>";
+  var c1 = tr.insertCell(); c1.className = "n"; c1.textContent = r.err ? "—" : kb(r.bytes);
+  var c2 = tr.insertCell(); c2.className = "n " + (r.err ? "bad" : cls(r.ms, r.bytes));
+  c2.textContent = r.err ? r.err : ms(r.ms);
+  var c3 = tr.insertCell(); c3.className = "n"; c3.textContent = r.err ? "—" : speed(r.bytes, r.ms);
+  tr.insertCell().textContent = r.from || "—";
+  lines.push([label, r.err || kb(r.bytes), r.err ? "" : ms(r.ms),
+              r.err ? "" : speed(r.bytes, r.ms), r.from || ""].join(" | "));
+}
+
+/* Тянем файл целиком и честно засекаем время до последнего байта. */
+function measure(url, cap){
+  var t0 = performance.now();
+  var head = {};
+  return fetch(url, cap ? { headers: { Range: "bytes=0-" + (cap - 1) } } : undefined)
+    .then(function(res){
+      head.status = res.status;
+      head.cache = res.headers.get("cf-cache-status") || "";
+      head.age = res.headers.get("age") || "";
+      head.enc = res.headers.get("content-encoding") || "";
+      if(!res.ok && res.status !== 206) throw new Error("HTTP " + res.status);
+      return res.arrayBuffer();
+    })
+    .then(function(buf){
+      var from = [];
+      if(head.cache) from.push(head.cache);
+      if(head.enc) from.push("сжат:" + head.enc);
+      if(head.age) from.push("в кэше " + head.age + " с");
+      if(cap) from.push("первые " + kb(cap));
+      return { bytes: buf.byteLength, ms: performance.now() - t0, from: from.join(", ") };
+    })
+    .catch(function(e){ return { err: String(e.message || e).slice(0, 40), ms: performance.now() - t0 }; });
+}
+
+function step(txt){ bar.textContent = txt; }
+
+async function run(){
+  tb.innerHTML = ""; lines = [];
+
+  /* Самая частая ошибка: файл открыли с диска двойным щелчком.
+     Тогда странице нечего опрашивать — она не на сайте, и всё падает.
+     Говорим об этом прямо, а не двенадцатью красными строками. */
+  if(location.protocol === "file:" || !location.host){
+    bar.innerHTML = '<b style="color:#e8402a">Страница открыта с диска, а не на сайте.</b><br><br>' +
+      'Залей этот файл в папку <code>public</code> на GitHub, подожди пару минут, ' +
+      'и открой по адресу:<br><br>' +
+      '<code style="color:#fff">anri.anri-yusupov.workers.dev/speed.html</code><br><br>' +
+      'Меряет она только тот сайт, на котором сама лежит — иначе браузер её никуда не пустит.';
+    return;
+  }
+  document.getElementById("go").disabled = true;
+  document.getElementById("go2").disabled = true;
+  lines.push("ОТЧЁТ О СКОРОСТИ — " + location.host);
+
+  /* ---- 0. скорость соединения ----
+     Главный вопрос: тормозит интернет или сам сайт? Меряем честно —
+     тянем настоящий файл с этого же сервера, дописав случайный «хвост»
+     к адресу, чтобы браузер не отдал его из своего кэша. Три захода,
+     берём лучший: так меньше шансов поймать случайную яму. */
+  group("Скорость соединения до этого сайта");
+  var best = 0, sample = 3145728;   /* 3 МБ — хватает, чтобы канал разогнался */
+  for(var t = 0; t < 3; t++){
+    step("Меряю скорость, заход " + (t + 1) + " из 3…");
+    var probe = await measure("media/loader.mp4?nocache=" + Math.random(), sample);
+    if(probe.err){ row("Замер " + (t+1), "media/loader.mp4", probe); continue; }
+    var mbit = probe.bytes * 8 / 1048576 / (probe.ms / 1000);
+    if(mbit > best) best = mbit;
+    row("Замер " + (t + 1), "3 МБ мимо кэша", probe);
+  }
+  if(best){
+    var need = TOTAL_SITE * 8 / best;
+    var tr0 = tb.insertRow(); tr0.className = "grp";
+    var td0 = tr0.insertCell(); td0.colSpan = 5;
+    td0.innerHTML = "Твоя скорость до сайта: <b>" + best.toFixed(1) + " Мбит/с</b>. " +
+      "При таком канале обычный сайт на 5 МБ открылся бы за <b>" +
+      (5 * 8 / best).toFixed(1) + " сек</b>.";
+    lines.push("скорость до сайта: " + best.toFixed(1) + " Мбит/с");
+    window.__speed = best;
+  }
+
+  /* ---- 1. вход ---- */
+  group("Вход: без этого сайт не стартует");
+  var core = [
+    ["Разметка", "index.html"],
+    ["Код сайта", "js/main.js"],
+    ["Библиотека 3D", "js/three.min.js?v=1"],
+    ["Данные 3D-фигуры", "data/scene.txt?v=1"],
+    ["Данные сайта (админка)", "api/data"]
+  ];
+  for(var i = 0; i < core.length; i++){
+    step("Меряю: " + core[i][0]);
+    var rc = await measure(core[i][1]);
+    addWeight(rc.bytes);
+    row(core[i][0], core[i][1], rc);
+  }
+
+  /* ---- 2. заставка ---- */
+  group("Заставка: первое, что видит человек");
+  step("Меряю ролик заставки");
+  row("Ролик заставки", "media/loader.mp4", await measure("media/loader.mp4", 3145728));
+  try{
+    var hl = await fetch("media/loader.mp4", { method:"HEAD" });
+    var fl = parseInt(hl.headers.get("content-length") || "0", 10);
+    if(fl){
+      addWeight(fl);
+      var trL = tb.insertRow();
+      trL.insertCell().innerHTML = "&nbsp;&nbsp;↳ полный вес заставки";
+      var cl = trL.insertCell(); cl.className = "n " + (fl > 4194304 ? "warn" : "ok");
+      cl.textContent = kb(fl);
+      trL.insertCell(); trL.insertCell(); trL.insertCell();
+      lines.push("  полный вес заставки: " + kb(fl));
+    }
+  }catch(e){}
+
+  /* ---- 3. кадры заглавного экрана ----
+     Список кадров зашит в main.js — достаём его оттуда, чтобы мерить
+     именно то, что грузит сайт, а не то, что я угадал. */
+  group("Заглавный экран: последовательность кадров");
+  var frames = [];
+  try{
+    var js = await fetch("js/main.js").then(function(r){ return r.text(); });
+    var m = js.match(/var FRAMES\s*=\s*\[([^\]]*)\]/);
+    if(m) frames = m[1].split(",").map(function(s){ return s.trim().replace(/^["']|["']$/g, ""); })
+                       .filter(function(s){ return s.length > 4; });
+  }catch(e){}
+  if(!frames.length){
+    row("Список кадров не найден в main.js", "—", { err: "не найден" });
+  } else {
+    lines.push("всего кадров: " + frames.length);
+    var head2 = tb.insertRow(); var c = head2.insertCell(); c.colSpan = 5;
+    c.style.color = "#7c8089"; c.textContent = "всего кадров: " + frames.length + " — меряю первый, средний и последний";
+    var pick = [0, Math.floor(frames.length / 2), frames.length - 1];
+    var sum = 0, okCount = 0;
+    for(var k = 0; k < pick.length; k++){
+      step("Меряю кадр " + (pick[k] + 1) + " из " + frames.length);
+      var r = await measure(frames[pick[k]]);
+      row("Кадр " + (pick[k] + 1), frames[pick[k]], r);
+      if(!r.err){ sum += r.bytes; okCount++; }
+    }
+    if(okCount){
+      var avg = sum / okCount, total = avg * frames.length;
+      var tr = tb.insertRow(); tr.className = "grp";
+      var td = tr.insertCell(); td.colSpan = 5;
+      td.innerHTML = "Все кадры вместе весят примерно <b>" + kb(total) + "</b>" +
+                     (total > 15728640 ? ' <span class="bad">— это очень много</span>' : "");
+      lines.push("все кадры вместе ~ " + kb(total));
+      addWeight(total);
+    }
+  }
+
+  /* ---- 4. медиа кейсов ---- */
+  group("Работы: обложки и превью");
+  var data = null;
+  try{ data = await fetch("api/data").then(function(r){ return r.json(); }); }catch(e){}
+  if(!data || !data.site){          /* сервер не ответил — берём запасные файлы */
+    try{
+      data = { site: await fetch("data/site.json").then(function(r){ return r.json(); }),
+               desk: await fetch("data/desk.json").then(function(r){ return r.json(); }) };
+    }catch(e){}
+  }
+  var projects = (data && data.site && data.site.projects) || [];
+  if(!projects.length) lines.push("список работ не получен");
+  for(var p = 0; p < projects.length; p++){
+    var pr = projects[p], name = (pr.title || "работа " + (p + 1));
+    if(pr.deskIcon){ step("Меряю значок: " + name);
+      var ri = await measure(pr.deskIcon); addWeight(ri.bytes);
+      row(name + " — значок", pr.deskIcon, ri); }
+    if(pr.cover){ step("Меряю обложку: " + name);
+      var rc2 = await measure(pr.cover); addWeight(rc2.bytes);
+      row(name + " — обложка", pr.cover, rc2); }
+    if(pr.coverVideo){
+      step("Меряю превью-видео: " + name);
+      var rv = await measure(pr.coverVideo, 1048576);   /* первый мегабайт */
+      row(name + " — видео превью", pr.coverVideo, rv);
+      /* сколько весит целиком — спрашиваем заголовок, файл не качаем */
+      try{
+        var h = await fetch(pr.coverVideo, { method: "HEAD" });
+        var full = parseInt(h.headers.get("content-length") || "0", 10);
+        if(full){
+          addWeight(/\.m3u8(\?|$)/i.test(pr.coverVideo) ? 0 : full);
+          var tr2 = tb.insertRow();
+          tr2.insertCell().innerHTML = "&nbsp;&nbsp;↳ полный вес этого ролика";
+          var cc = tr2.insertCell(); cc.className = "n " + (full > 12582912 ? "bad" : "ok");
+          cc.textContent = kb(full);
+          tr2.insertCell(); tr2.insertCell();
+          var predict = rv.err ? "" : ms(full / (rv.bytes / rv.ms));
+          tr2.insertCell().textContent = predict ? "целиком приедет за " + predict : "";
+          lines.push("  полный вес: " + kb(full) + (predict ? ", целиком за " + predict : ""));
+        }
+      }catch(e){}
+    }
+  }
+
+  /* ---- 5. музыка ----
+     Треки лежат значками на столе (desk.json) плюс запасной файл в разметке.
+     Музыка стартует после ENTER, и если файл тяжёлый — она молчит и тормозит вход. */
+  group("Музыка");
+  var tracks = [], desk = (data && data.desk) || {};
+  (desk.icons || []).forEach(function(ic){
+    if(ic.type === "track" && ic.src) tracks.push([ic.label || "трек", ic.src, !!ic.startup]);
+    (ic.items || []).forEach(function(f){
+      if(f.src && /\.(mp3|m4a|wav|ogg)(\?|$)/i.test(f.src)) tracks.push([f.name || "трек", f.src, false]);
+    });
+  });
+  if(!tracks.length) tracks.push(["трек по умолчанию", "media/bbfe5b9a8c.mp3", true]);
+  for(var q = 0; q < tracks.length; q++){
+    step("Меряю музыку: " + tracks[q][0]);
+    var rt = await measure(tracks[q][1], 1048576);
+    row(tracks[q][0] + (tracks[q][2] ? " (играет при входе)" : ""), tracks[q][1], rt);
+    try{
+      var hm = await fetch(tracks[q][1], { method: "HEAD" });
+      var fullm = parseInt(hm.headers.get("content-length") || "0", 10);
+      if(fullm){
+        addWeight(fullm);
+        var tr3 = tb.insertRow();
+        tr3.insertCell().innerHTML = "&nbsp;&nbsp;↳ полный вес трека";
+        var cm = tr3.insertCell(); cm.className = "n " + (fullm > 8388608 ? "bad" : "ok");
+        cm.textContent = kb(fullm);
+        tr3.insertCell(); tr3.insertCell(); tr3.insertCell();
+        lines.push("  полный вес трека: " + kb(fullm));
+      }
+    }catch(e){}
+  }
+
+  /* ---- итог ---- */
+  var trF = tb.insertRow(); trF.className = "grp";
+  var tdF = trF.insertCell(); tdF.colSpan = 5;
+  var txt = "Всего сайт просит у зрителя примерно <b>" + TOTAL_SITE.toFixed(1) + " МБ</b>";
+  if(window.__speed) txt += ", на твоём канале это <b>" +
+     (TOTAL_SITE * 8 / window.__speed).toFixed(0) + " секунд</b>";
+  tdF.innerHTML = txt + ".";
+  lines.push("", "ИТОГО: " + TOTAL_SITE.toFixed(1) + " МБ" +
+    (window.__speed ? ", на этом канале " + (TOTAL_SITE*8/window.__speed).toFixed(0) + " сек" : ""));
+
+  step("Готово.");
+  out.value = lines.join("\n");
+  out.style.display = "block";
+  document.getElementById("copy").disabled = false;
+  document.getElementById("go").disabled = false;
+  document.getElementById("go2").disabled = false;
+}
+
+document.getElementById("go").addEventListener("click", run);
+document.getElementById("go2").addEventListener("click", run);
+document.getElementById("copy").addEventListener("click", function(){
+  out.select(); document.execCommand("copy");
+  this.textContent = "Скопировано";
+  var b = this; setTimeout(function(){ b.textContent = "Скопировать отчёт"; }, 1600);
+});
+</script>
+</body>
+</html>
