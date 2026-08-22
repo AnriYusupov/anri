@@ -448,7 +448,7 @@ body.gl #scene.gridmode .frame > img,body.gl #scene.gridmode .frame > video{opac
 <audio id="deskAudio" loop preload="auto"></audio>
 <div id="ayLoad">
   <video id="ayLoadV" autoplay muted loop playsinline preload="auto"
-         src="media/loader.mp4"></video>
+         src="media/loader.mp4?v=2"></video>
   <div id="ayLoadC">
     <div id="ayLoadT">LOADING</div>
     <div id="ayLoadBar"><div id="ayLoadFill"></div></div>
@@ -456,6 +456,38 @@ body.gl #scene.gridmode .frame > img,body.gl #scene.gridmode .frame > video{opac
     <button id="ayEnter" type="button">Enter</button>
   </div>
 </div>
+<script>
+/* Страховка от «замёрзшей» заставки.
+   Всей папке /media/ мы велели храниться в браузере год — файлы там никогда
+   не меняются, и перекачивать их каждый раз незачем. Но если копия попала
+   в кэш обрезанной (например, связь рвалась во время закачки), браузер будет
+   честно проигрывать обрывок и упираться в пустоту, а сам заново её не возьмёт:
+   правило же говорит «файл не меняется».
+   Поэтому следим за временем воспроизведения. Не сдвинулось три секунды подряд
+   при том, что видео не на паузе, — значит встали. Один раз перезапрашиваем
+   файл с новым адресом: для браузера это другой файл, и он качает его начисто.
+   Повторяем только однажды — если и свежая копия не играет, дело не в кэше,
+   и дёргать сеть по кругу бессмысленно. */
+(function(){
+  var v   = document.getElementById("ayLoadV");
+  var box = document.getElementById("ayLoad");
+  if(!v || !box) return;
+  var last = -1, stuck = 0, retried = false;
+  var timer = setInterval(function(){
+    if(box.classList.contains("gone")){ clearInterval(timer); return; }
+    if(!v.paused && v.currentTime === last) stuck++; else stuck = 0;
+    last = v.currentTime;
+    if(stuck >= 6 && !retried){          /* 6 проверок по 500 мс = 3 секунды */
+      retried = true; stuck = 0;
+      console.warn("Заставка встала — перекачиваю ролик мимо кэша");
+      v.src = "media/loader.mp4?r=" + Date.now();
+      v.load();
+      var p = v.play();
+      if(p && p.catch) p.catch(function(){});
+    }
+  }, 500);
+})();
+</script>
 
 
 
