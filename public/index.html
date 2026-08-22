@@ -14,7 +14,7 @@
      прежний порядок: запрос уходит с первых миллисекунд, вместе со всем остальным. -->
 <link rel="preload" as="script" href="js/three.min.js?v=1">
 <link rel="preload" as="fetch" href="data/scene.txt?v=1" crossorigin="anonymous">
-<link rel="preload" as="script" href="js/main.js?v=6">
+<link rel="preload" as="script" href="js/main.js?v=7">
 
 <!-- превью ссылки в мессенджерах и соцсетях -->
 <meta property="og:type" content="website">
@@ -1720,7 +1720,7 @@ syncProt();
       return Promise.all([ getJSON("data/site.json"), getJSON("data/desk.json") ])
         .then(function(d){ inject("SITE_DATA", d[0]); inject("DESK_LAYOUT", d[1]); });
     })
-    .then(function(){ step("data"); return load("js/main.js?v=6"); })
+    .then(function(){ step("data"); return load("js/main.js?v=7"); })
     .then(function(){
       step("main");
       return fxDone.then(function(){ step("three"); });
