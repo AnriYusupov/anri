@@ -34,7 +34,42 @@ function setVideoSrc(el, url){
   if(el.canPlayType && el.canPlayType("application/vnd.apple.mpegurl")){ el.src = url; return; }
   loadHls().then(function(Hls){
     if(!Hls || !Hls.isSupported()){ el.src = url; return; }
-    var h = new Hls({ maxBufferLength: 12 });   /* не набираем лишнего впрок */
+    var h = new Hls({
+      maxBufferLength: 12,          /* не набираем лишнего впрок */
+
+      /* Видео в потоке нарезано на несколько дорожек разного качества.
+         По умолчанию плеер считает, что канал у зрителя медленный —
+         полмегабита — и начинает с самой мутной, а потом медленно
+         поднимается, замеряя скорость на каждом куске. Отсюда «первые
+         двадцать секунд каша». Портфолио так показывать нельзя.
+         Говорим сразу: канал быстрый, начинай с хорошего. Если окажется,
+         что не тянет, плеер сам опустится — но уже вниз от хорошего,
+         а не вверх от плохого. */
+      abrEwmaDefaultEstimate: 10000000,
+      abrBandWidthUpFactor: 0.9,    /* смелее поднимать качество (по умолчанию 0.7) */
+      startFragPrefetch: true       /* первый кусок — не дожидаясь готовности плеера */
+    });
+
+    /* Стартовое качество выбираем сами, а не отдаём на откуп замерам.
+       Смотрим высоту окошка на экране (с поправкой на ретину) и берём
+       первую дорожку, которая в него влезает: в маленьком превью 4K не нужен,
+       он там всё равно не виден, а трафик сожрёт. Если размер ещё неизвестен —
+       берём максимум: лишний трафик лучше, чем мыло в кейсе.
+       Дальше отпускаем автоматику: просядет канал — плеер опустится сам. */
+    h.on(Hls.Events.MANIFEST_PARSED, function(){
+      var L = h.levels || [];
+      if(!L.length) return;
+      var need = (el.clientHeight || 0) * Math.min(window.devicePixelRatio || 1, 2);
+      var pick = L.length - 1;
+      if(need > 0){
+        for(var i = 0; i < L.length; i++){
+          if((L[i].height || 0) >= need){ pick = i; break; }
+        }
+      }
+      h.startLevel   = pick;
+      h.nextAutoLevel = pick;
+    });
+
     h.loadSource(url);
     h.attachMedia(el);
     el.__hls = h;
