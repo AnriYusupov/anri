@@ -282,6 +282,19 @@ input[type=range]{width:100%}
       <button class="btn" id="mClose">Закрыть</button>
     </div>
     <div class="hint" id="upHint" style="margin-bottom:6px"></div>
+    <label id="upStreamWrap" style="display:none;align-items:center;gap:7px;
+           margin-bottom:8px;font-size:13px;cursor:pointer">
+      <input type="checkbox" id="upStream">
+      <span>Лёгкий поток вместо файла — для превью при наведении</span>
+    </label>
+    <div class="hint" id="upStreamHint" style="display:none;margin-bottom:8px">
+      Обычная заливка кладёт файл как есть: какое качество выгрузили, такое зритель
+      и увидит. Предел — 100 МБ. Для 1080p это примерно минута при 12 Мбит/с
+      (вес в МБ ≈ секунды × Мбит/с ÷ 8).<br>
+      Поток пережимает ролик у Cloudflare до 1080p на 5.4 Мбит/с и подстраивается
+      под интернет зрителя. В маленьком окошке превью разница не видна, в большом —
+      видна сразу. Поэтому потоком имеет смысл заливать только превью.
+    </div>
     <div id="upStat" style="margin-bottom:12px;font-size:13px;min-height:18px"></div>
     <div class="mini" id="mediaGrid"></div>
   </div>
@@ -1442,6 +1455,11 @@ function openMedia(cb, want){
   var inp = $("#upFile");
   inp.accept = want === "video" ? "video/*" : (want === "image" ? "image/*" : "");
   $("#upStat").textContent = "";
+  /* Выбор «файлом или потоком» показываем только там, где заливают видео —
+     в остальных полях он лишний и только путает. */
+  var wrap = $("#upStreamWrap"), sh = $("#upStreamHint");
+  if(wrap) wrap.style.display = (want === "video" || !want) ? "flex" : "none";
+  if(sh)   sh.style.display   = (want === "video" || !want) ? "" : "none";
   var g = $("#mediaGrid");
   g.innerHTML = "";
   var shown = 0;
@@ -1616,30 +1634,63 @@ function handleUpload(f){
     stat.textContent = "Это не музыка (" + (f.type || "неизвестный тип") + "). Нужен файл .mp3";
     return;
   }
-  /* Видео идёт в Cloudflare Stream — там оно превращается в лесенку версий
-     и играет потоком. Вес ролика больше не имеет значения, поэтому никаких
-     предупреждений о тяжести и никакого предела в 100 МБ для него нет. */
-  if(isVideo) return uploadToStream(f, stat);
+  /* ГРАБЛИ, дорого стоившие. Раньше любое видео уезжало в Cloudflare Stream.
+     Оказалось, Stream пережимает ролик своим битрейтом и настроек не даёт:
+     потолок — 1080p на 5.4 Мбит/с. На гладких градиентах это видно сразу,
+     полосами и мылом, особенно в первые секунды кадра. Для сравнения, N3
+     раздают своё видео файлом на 8.9 Мбит/с — и никаких жалоб.
+     Поэтому по умолчанию видео снова идёт обычным файлом в хранилище:
+     какое качество выгрузили, такое зритель и увидит.
+     Потоком — только если человек сам поставил галочку, для лёгких превью. */
+  var wantStream = isVideo && $("#upStream") && $("#upStream").checked;
+  if(wantStream) return uploadToStream(f, stat);
 
   if(f.size > 100 * 1048576){
     stat.style.color = "var(--accent)";
-    stat.textContent = "Файл " + mb + " МБ — больше предела в 100 МБ. Сожмите и попробуйте снова.";
+    stat.textContent = isVideo
+      ? "Ролик " + mb + " МБ — больше предела в 100 МБ, столько Cloudflare пропускает "
+        + "за одну заливку. Выгрузите 1080p при 12 Мбит/с: вес в МБ ≈ секунды × Мбит/с ÷ 8. "
+        + "Для роликов длиннее минуты берите 10 Мбит/с."
+      : "Файл " + mb + " МБ — больше предела в 100 МБ. Сожмите и попробуйте снова.";
     return;
   }
 
+  var kind = isVideo ? "video" : (isAudio ? "audio" : "image");
+
   stat.style.color = "var(--dim)";
-  stat.textContent = "Загружаю «" + f.name + "» (" + mb + " МБ)… для видео это может занять минуту.";
+  stat.textContent = "Загружаю «" + f.name + "» (" + mb + " МБ)…";
   say("Загружаю " + f.name + "…");
 
-  var fd = new FormData();
-  fd.append("file", f);
-  api("upload", { method:"POST", body: fd })
+  /* Обычный fetch не умеет рассказывать, сколько уже ушло. Для картинки это
+     неважно, а для восьмидесятимегабайтного ролика — важно очень: без полоски
+     человек решит, что всё зависло, и уйдёт. Поэтому XHR. */
+  new Promise(function(res, rej){
+    var fd = new FormData();
+    fd.append("file", f);
+    var xhr = new XMLHttpRequest();
+    xhr.open("POST", "api/upload", true);
+    xhr.withCredentials = true;
+    xhr.upload.onprogress = function(e){
+      if(!e.lengthComputable) return;
+      stat.textContent = "Загружаю «" + f.name + "» — "
+        + Math.round(e.loaded / e.total * 100) + "% из " + mb + " МБ";
+    };
+    xhr.onload = function(){
+      var j = {};
+      try{ j = JSON.parse(xhr.responseText || "{}"); }catch(e){}
+      if(xhr.status >= 200 && xhr.status < 300 && j.url) return res(j);
+      if(xhr.status === 413) return rej(new Error("Файл не прошёл: тяжелее 100 МБ"));
+      rej(new Error(j.error || ("Ошибка " + xhr.status)));
+    };
+    xhr.onerror = function(){ rej(new Error("Обрыв связи при заливке")); };
+    xhr.send(fd);
+  })
     .then(function(r){
-      MEDIA.unshift({ url:r.url, kind: isVideo ? "video" : (isAudio ? "audio" : "image"), bytes:r.bytes });
+      MEDIA.unshift({ url:r.url, kind:kind, bytes:r.bytes });
       stat.style.color = "var(--ok)";
       stat.textContent = "Готово: " + f.name;
       say("Файл загружен", "ok");
-      if(pickTarget){ pickTarget(r.url, isVideo ? "video" : (isAudio ? "audio" : "image"), f.name); closeMedia(); }
+      if(pickTarget){ pickTarget(r.url, kind, f.name); closeMedia(); }
     })
     .catch(function(e){
       stat.style.color = "var(--accent)";
